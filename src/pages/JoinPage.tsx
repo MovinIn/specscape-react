@@ -4,64 +4,76 @@ import { PageHeader } from '../components/PageHeader'
 export default function JoinPage() {
   return (
     <div className="page page-narrow">
-      <PageHeader
-        title="Host a Sensor"
-        lead="Join SpecScape by registering, deploying a node, and sharing spectrum with the community."
-      />
+      <PageHeader title="Join SpecScape" />
       <div className="prose stack">
-        <p>Three steps to contribute:</p>
+        <p>There are three steps to becoming a contributor</p>
         <ol>
           <li>
-            <Link to="/account/register">Create a free account</Link>
+            <Link to="/account/register">Create a free account</Link> to become a
+            member of the SpecScape community
           </li>
-          <li>Set up a sensor at your location</li>
+          <li>Set up a sensor at your place</li>
           <li>
-            Register the node so its measurements appear in the SpecScape
-            network
+            Make your data available to the community by adding your sensor in
+            our <Link to="/sensors/add">SpecScape App</Link>
           </li>
         </ol>
 
-        <section className="panel stack" id="apply">
-          <h2>Apply for a sensor</h2>
+        <hr />
+
+        <h3>Getting a Sensor</h3>
+
+        <section className="panel stack" id="build">
+          <h3>Build Your Own Sensor</h3>
           <p>
-            Sponsored devices are allocated periodically to hosts who can offer
-            reliable power, Ethernet, and geographically useful coverage. Tell
-            us about your site and motivation—we review applications in batches
-            and ship when stock allows.
+            Is is easy to set up a{' '}
+            <a
+              href="https://www.raspberrypi.org/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Raspberry Pi
+            </a>{' '}
+            as a SpecScape sensor. For this purpose you will need:
+          </p>
+          <ul>
+            <li>A Raspberry Pi (or compatible ARM computer) ~ $45</li>
+            <li>
+              A radio front-end supported by the{' '}
+              <a
+                href="http://sdr.osmocom.org/trac/wiki/rtl-sdr"
+                target="_blank"
+                rel="noreferrer"
+              >
+                rtl-sdr library
+              </a>{' '}
+              ~ $30
+            </li>
+            <li>
+              The SpecScape Raspberry Pi image. You can find the download{' '}
+              <Link to="/open-source">here</Link>, on our open source page.
+            </li>
+          </ul>
+          <p>
+            Further details on particular products can be found in our{' '}
+            <Link to="/hardware">list of compatible hardware</Link>.
+          </p>
+          <p>
+            For detailed installation and setup instructions have a look at the{' '}
+            <Link to="/sensor-setup">setup guide</Link>.
+          </p>
+        </section>
+
+        <section className="panel stack" id="apply">
+          <h3>Apply for a Sensor</h3>
+          <p>
+            If you cannot build your own sensor, you can apply for a sponsored
+            device. Tell us about your site—we review applications periodically
+            when stock is available.
           </p>
           <p>
             <Link className="btn btn-primary" to="/contact">
-              Start an application conversation
-            </Link>
-          </p>
-        </section>
-
-        <section className="panel stack" id="buy">
-          <h2>Buy a sensor</h2>
-          <p>
-            Purchasing a pre-built kit is the fastest path if you prefer not to
-            assemble parts yourself. Product links are published when kits are
-            in stock; until then, reach out and we will point you to current
-            options.
-          </p>
-          <p>
-            <Link className="btn btn-ghost" to="/contact">
-              Ask about kits
-            </Link>
-          </p>
-        </section>
-
-        <section className="panel stack" id="build">
-          <h2>Build your own</h2>
-          <p>
-            A SpecScape node is typically a Raspberry Pi (or similar ARM board),
-            an RTL-SDR class frontend (~$30), and the SpecScape sensing image.
-            See <Link to="/hardware">compatible hardware</Link> for validated
-            combinations, then follow the install and registration walkthrough.
-          </p>
-          <p>
-            <Link className="btn btn-primary" to="/sensor-setup">
-              Open sensor setup guide
+              Apply for a Sensor!
             </Link>
           </p>
         </section>

@@ -39,8 +39,11 @@ export function Navbar() {
     <header className="site-nav" ref={navRef}>
       <div className="site-nav__inner">
         <Link className="site-nav__brand" to="/" onClick={close}>
-          <span className="brand-mark" aria-hidden />
-          SpecScape
+          <img
+            className="brand-logo"
+            src="/images/specscape.png"
+            alt="SpecScape"
+          />
         </Link>
 
         <button
