@@ -1,72 +1,100 @@
-import { Link } from 'react-router-dom'
-import { PageHeader } from '../components/PageHeader'
-
-const partners = [
-  {
-    name: 'armasuisse Science and Technology',
-    href: 'http://www.ar.admin.ch/internet/armasuisse/de/home/themen/armasuisseWissenschaftundTechnologie.html',
-  },
-  {
-    name: 'IMDEA Networks',
-    href: 'http://www.networks.imdea.org',
-  },
-  {
-    name: 'KU Leuven',
-    href: 'http://www.kuleuven.be/',
-  },
-  {
-    name: 'SERO systems',
-    href: 'https://sero-systems.de',
-  },
-  {
-    name: 'University of Ljubljana',
-    href: 'https://www.uni-lj.si/eng/',
-  },
-  {
-    name: 'Jetvision',
-    href: 'https://jetvision.de',
-  },
-  {
-    name: 'University of Murcia',
-    href: 'https://www.um.es',
-  },
-]
-
 export default function PartnersPage() {
   return (
-    <div className="page page-narrow">
-      <PageHeader
-        title="Partners"
-        lead="SpecScape exists because of feeders, researchers, and industry supporters who keep the network alive."
-      />
-      <div className="prose stack">
-        <p>
-          SpecScape is a collaborative spectrum monitoring initiative that would
-          not scale without hosts and partners from academia, industry, and the
-          enthusiast community. Organizations can sponsor receivers, contribute
-          expertise, and work closely with the research and engineering teams
-          behind the platform. If you already support the network but your
-          organization is missing here, please{' '}
-          <Link to="/contact">contact us</Link>.
-        </p>
-        <div className="grid-2">
-          {partners.map((partner) => (
-            <a
-              key={partner.name}
-              className="panel"
-              href={partner.href}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <strong>{partner.name}</strong>
-            </a>
-          ))}
+    <div className="container">
+      <div className="row">
+        <div className="col-sm-12">
+          <div className="page-header">
+            <h2>Partners</h2>
+          </div>
+
+          <p className="text-justify">
+            SpecScape is a project that could not exist without its feeders
+            and supporters from industry, academia, and private
+            enthusiasts. We would like to thank everyone for their
+            contributions! If your company or institution wants to become a
+            partner of the SpecScape Network, you can support us, e.g., by
+            sponsoring a receiver or helping us improve our network with
+            your expertise. In return, you can work together closely with
+            our researchers and developers and directly benefit from our
+            knowledge. If you are supporting the SpecScape Network but the
+            logo of your organization is missing, please contact us.
+          </p>
+          <div className="row" style={{ marginTop: 25 }}>
+            <div className="col-sm-offset-1 col-sm-3 text-center img-space">
+              <a
+                href="http://www.ar.admin.ch/internet/armasuisse/de/home/themen/armasuisseWissenschaftundTechnologie.html"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <img
+                  src="/images/armasuisse_logo.gif"
+                  width={220}
+                  height={69}
+                  alt="armasuisse"
+                />
+              </a>
+            </div>
+            <div className="col-sm-3 text-center img-space">
+              <a href="http://www.networks.imdea.org" target="_blank" rel="noreferrer">
+                <img src="/images/imdea_logo.png" alt="IMDEA Networks" />
+              </a>
+            </div>
+            <div className="col-sm-3 text-center img-space">
+              <a href="http://www.kuleuven.be/" target="_blank" rel="noreferrer">
+                <img
+                  src="/images/ku_leuven_logo.png"
+                  width={180}
+                  height={65}
+                  alt="KU Leuven"
+                />
+              </a>
+            </div>
+          </div>
+          <div className="row" style={{ marginTop: 25 }}>
+            <div className="col-sm-offset-1 col-sm-3 text-center img-space">
+              <a href="https://sero-systems.de" target="_blank" rel="noreferrer">
+                <img
+                  src="/images/sero_systems_logo.png"
+                  width={140}
+                  height={70}
+                  alt="SERO systems"
+                />
+              </a>
+            </div>
+            <div className="col-sm-3 text-center img-space">
+              <a href="https://www.uni-lj.si/eng/" target="_blank" rel="noreferrer">
+                <img
+                  src="/images/ljubliana.png"
+                  width={220}
+                  height={100}
+                  alt="University of Ljubljana"
+                />
+              </a>
+            </div>
+            <div className="col-sm-3 text-center img-space">
+              <a href="https://jetvision.de" target="_blank" rel="noreferrer">
+                <img
+                  src="/images/jetvision_logo.png"
+                  width={190}
+                  height={71}
+                  alt="Jetvision"
+                />
+              </a>
+            </div>
+          </div>
+          <div className="row" style={{ marginTop: 25 }}>
+            <div className="col-sm-offset-4 col-sm-3 text-center img-space">
+              <a href="https://www.um.es" target="_blank" rel="noreferrer">
+                <img
+                  src="/images/um_logo.png"
+                  width={200}
+                  height={53}
+                  alt="University of Murcia"
+                />
+              </a>
+            </div>
+          </div>
         </div>
-        <p>
-          Interested in a deeper collaboration? See{' '}
-          <Link to="/work-with-us">Work with Us</Link> or{' '}
-          <Link to="/join">host a sensor</Link>.
-        </p>
       </div>
     </div>
   )

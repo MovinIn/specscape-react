@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 
 const TITLES: Record<string, string> = {
   '/': 'SpecScape',
+  '/contribute': 'Contribute · SpecScape',
   '/join': 'Host a Sensor · SpecScape',
   '/sensor-setup': 'Sensor Setup · SpecScape',
   '/work-with-us': 'Work with Us · SpecScape',

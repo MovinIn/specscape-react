@@ -1,16 +1,28 @@
-import { NavLink, Link } from 'react-router-dom'
-import { useEffect, useId, useRef, useState } from 'react'
+import { NavLink, Link, useLocation } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
+
+const ABOUT_LINKS: [string, string][] = [
+  ['/hardware', 'Compatible Hardware'],
+  ['/datasets', 'Datasets'],
+  ['/open-source', 'Open Source'],
+  ['/partners', 'Partners'],
+  ['/publications', 'Publications'],
+  ['/faq', 'Frequently Asked Questions'],
+  ['/contact', 'Contact'],
+  ['/terms-of-service', 'Terms of Service'],
+  ['/privacy-policy', 'Privacy Policy'],
+]
 
 export function Navbar() {
   const { authenticated, isAdmin, loading } = useAuth()
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const { pathname } = useLocation()
+  const [collapsed, setCollapsed] = useState(true)
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const navRef = useRef<HTMLElement>(null)
-  const menuId = useId()
 
   const close = () => {
-    setMobileOpen(false)
+    setCollapsed(true)
     setOpenMenu(null)
   }
 
@@ -19,224 +31,232 @@ export function Navbar() {
   }
 
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') close()
-    }
     function onClick(e: MouseEvent) {
       if (!navRef.current?.contains(e.target as Node)) {
         setOpenMenu(null)
       }
     }
-    document.addEventListener('keydown', onKey)
     document.addEventListener('mousedown', onClick)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('mousedown', onClick)
-    }
+    return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
+  useEffect(() => {
+    close()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname])
+
+  const isActive = (paths: string[]) => paths.includes(pathname)
+
   return (
-    <header className="site-nav" ref={navRef}>
-      <div className="site-nav__inner">
-        <Link className="site-nav__brand" to="/" onClick={close}>
-          <img
-            className="brand-logo"
-            src="/images/specscape.png"
-            alt="SpecScape"
-          />
-        </Link>
-
-        <button
-          type="button"
-          className="nav-toggle"
-          aria-expanded={mobileOpen}
-          aria-controls={menuId}
-          aria-label="Toggle navigation"
-          onClick={() => setMobileOpen((v) => !v)}
-        >
-          Menu
-        </button>
-
-        <nav aria-label="Primary">
-          <ul
-            id={menuId}
-            className={`site-nav__links${mobileOpen ? ' open' : ''}`}
+    <nav
+      className="navbar navbar-inverse navbar-fixed-top"
+      ref={navRef}
+    >
+      <div className="container">
+        <div className="navbar-header">
+          <button
+            type="button"
+            className={`navbar-toggle${collapsed ? ' collapsed' : ''}`}
+            aria-expanded={!collapsed}
+            onClick={() => setCollapsed((v) => !v)}
           >
-            <li className={openMenu === 'contribute' ? 'open' : ''}>
+            <span className="sr-only">Toggle navigation</span>
+            <span className="icon-bar" />
+            <span className="icon-bar" />
+            <span className="icon-bar" />
+          </button>
+          <Link className="navbar-brand" to="/" onClick={close}>
+            <span className="es-logo" />
+          </Link>
+        </div>
+
+        <div className={`collapse navbar-collapse${collapsed ? '' : ' in'}`}>
+          <ul className="nav navbar-nav">
+            <li
+              className={`dropdown${openMenu === 'contribute' ? ' open' : ''}${
+                isActive(['/join']) ? ' active' : ''
+              }`}
+            >
               <button
                 type="button"
-                className="nav-trigger"
-                aria-expanded={openMenu === 'contribute'}
+                className="dropdown-toggle"
                 aria-haspopup="true"
+                aria-expanded={openMenu === 'contribute'}
                 onClick={() => toggleMenu('contribute')}
               >
-                Contribute
+                <span className="glyphicon glyphicon-road" />
+                &nbsp;Contribute <span className="caret" />
               </button>
-              <ul
-                className={`nav-menu${openMenu === 'contribute' ? ' open' : ''}`}
-                role="menu"
-              >
-                <li role="none">
-                  <Link role="menuitem" to="/join" onClick={close}>
-                    Host a Sensor
-                  </Link>
-                </li>
-                <li role="none">
-                  <Link role="menuitem" to="/work-with-us" onClick={close}>
-                    Work with Us
+              <ul className="dropdown-menu">
+                <li>
+                  <Link to="/join" onClick={close}>
+                    <span className="glyphicon glyphicon-play" />
+                    &nbsp;Host a Sensor
                   </Link>
                 </li>
               </ul>
             </li>
 
-            <li>
-              <NavLink className="nav-link" to="/api-spec" onClick={close}>
-                OpenAPI
+            <li className={isActive(['/api-spec']) ? 'active' : ''}>
+              <NavLink to="/api-spec" onClick={close}>
+                <span className="glyphicon glyphicon-equalizer" /> OpenAPI
               </NavLink>
             </li>
 
-            <li className={openMenu === 'about' ? 'open' : ''}>
+            <li className={`dropdown${openMenu === 'about' ? ' open' : ''}`}>
               <button
                 type="button"
-                className="nav-trigger"
-                aria-expanded={openMenu === 'about'}
+                className="dropdown-toggle"
                 aria-haspopup="true"
+                aria-expanded={openMenu === 'about'}
                 onClick={() => toggleMenu('about')}
               >
-                About
+                About <span className="caret" />
               </button>
-              <ul
-                className={`nav-menu${openMenu === 'about' ? ' open' : ''}`}
-                role="menu"
-              >
-                {[
-                  ['/hardware', 'Compatible Hardware'],
-                  ['/datasets', 'Datasets'],
-                  ['/open-source', 'Open Source'],
-                  ['/partners', 'Partners'],
-                  ['/publications', 'Publications'],
-                  ['/faq', 'FAQ'],
-                  ['/contact', 'Contact'],
-                  ['/terms-of-service', 'Terms of Service'],
-                  ['/privacy-policy', 'Privacy Policy'],
-                ].map(([to, label]) => (
-                  <li key={to} role="none">
-                    <Link role="menuitem" to={to} onClick={close}>
+              <ul className="dropdown-menu">
+                {ABOUT_LINKS.map(([to, label]) => (
+                  <li key={to} className={pathname === to ? 'active' : ''}>
+                    <Link to={to} onClick={close}>
                       {label}
                     </Link>
                   </li>
                 ))}
               </ul>
             </li>
+          </ul>
 
-            <li className={openMenu === 'app' ? 'open' : ''}>
+          <ul className="nav navbar-nav navbar-right">
+            <li
+              className={`dropdown${openMenu === 'app' ? ' open' : ''}${
+                isActive([
+                  '/sensors',
+                  '/specmon',
+                  '/iq-datasets',
+                  '/occupancy',
+                  '/ranking',
+                ])
+                  ? ' active'
+                  : ''
+              }`}
+            >
               <button
                 type="button"
-                className="nav-trigger"
-                aria-expanded={openMenu === 'app'}
+                className="dropdown-toggle"
                 aria-haspopup="true"
+                aria-expanded={openMenu === 'app'}
                 onClick={() => toggleMenu('app')}
               >
-                My SpecScape
+                <span className="glyphicon glyphicon-user" /> My SpecScape{' '}
+                <span className="caret" />
               </button>
-              <ul
-                className={`nav-menu${openMenu === 'app' ? ' open' : ''}`}
-                role="menu"
-              >
+              <ul className="dropdown-menu">
                 {!loading && !authenticated && (
-                  <li role="none">
-                    <Link role="menuitem" to="/login" onClick={close}>
-                      Login
+                  <li className={pathname === '/login' ? 'active' : ''}>
+                    <Link to="/login" onClick={close}>
+                      <span className="glyphicon glyphicon-log-in" /> Login
                     </Link>
                   </li>
                 )}
-                <li role="none">
-                  <Link role="menuitem" to="/sensors" onClick={close}>
-                    Sensors
+                <li className={pathname === '/sensors' ? 'active' : ''}>
+                  <Link to="/sensors" onClick={close}>
+                    <span className="glyphicon glyphicon-th" /> Sensors
                   </Link>
                 </li>
-                <li role="none">
-                  <Link role="menuitem" to="/spectrum-decoder" onClick={close}>
+                <li className={pathname === '/spectrum-decoder' ? 'active' : ''}>
+                  <Link to="/spectrum-decoder" onClick={close}>
+                    <span className="glyphicon glyphicon-sort-by-order" />{' '}
                     Spectrum Decoder
                   </Link>
                 </li>
-                <li role="none">
-                  <Link role="menuitem" to="/specmon" onClick={close}>
-                    Spectrum Monitor
+                <li className={pathname === '/specmon' ? 'active' : ''}>
+                  <Link to="/specmon" onClick={close}>
+                    <span className="glyphicon glyphicon-signal" /> Spectrum
+                    Monitor
                   </Link>
                 </li>
-                <li role="none">
-                  <Link role="menuitem" to="/iq-datasets" onClick={close}>
-                    I/Q Data Sets
+                <li className={pathname === '/iq-datasets' ? 'active' : ''}>
+                  <Link to="/iq-datasets" onClick={close}>
+                    <span className="glyphicon glyphicon-file" /> I/Q Data Sets
                   </Link>
                 </li>
-                <li role="none">
-                  <Link role="menuitem" to="/occupancy" onClick={close}>
-                    Channel Occupancy
+                <li className={pathname === '/occupancy' ? 'active' : ''}>
+                  <Link to="/occupancy" onClick={close}>
+                    <span className="glyphicon glyphicon-scale" /> Channel
+                    Occupancy
                   </Link>
                 </li>
-                <li role="none">
-                  <Link role="menuitem" to="/ranking" onClick={close}>
-                    Sensor Ranking
+                <li className={pathname === '/ranking' ? 'active' : ''}>
+                  <Link to="/ranking" onClick={close}>
+                    <span className="glyphicon glyphicon-list-alt" /> Sensor
+                    Ranking
                   </Link>
                 </li>
                 {isAdmin && (
                   <>
-                    <li className="divider" aria-hidden />
-                    <li role="none">
-                      <Link
-                        role="menuitem"
-                        to="/campaign-management"
-                        onClick={close}
-                      >
-                        Campaign Management
+                    <li role="separator" className="divider" />
+                    <li
+                      className={
+                        pathname === '/campaign-management' ? 'active' : ''
+                      }
+                    >
+                      <Link to="/campaign-management" onClick={close}>
+                        <span className="glyphicon glyphicon-briefcase" />
+                        &nbsp;Campaign Management{' '}
+                        <small className="text-muted">(EXPERIMENTAL)</small>
                       </Link>
                     </li>
-                    <li role="none">
-                      <Link
-                        role="menuitem"
-                        to="/sensor-application-list"
-                        onClick={close}
-                      >
-                        Sponsoring Requests
+                    <li
+                      className={
+                        pathname === '/sensor-application-list' ? 'active' : ''
+                      }
+                    >
+                      <Link to="/sensor-application-list" onClick={close}>
+                        <span className="glyphicon glyphicon-heart" />
+                        &nbsp;Sponsoring Requests
                       </Link>
                     </li>
-                    <li role="none">
-                      <Link
-                        role="menuitem"
-                        to="/sensor-application-statistics"
-                        onClick={close}
-                      >
-                        Sponsoring Statistics
+                    <li
+                      className={
+                        pathname === '/sensor-application-statistics'
+                          ? 'active'
+                          : ''
+                      }
+                    >
+                      <Link to="/sensor-application-statistics" onClick={close}>
+                        <span className="glyphicon glyphicon-stats" />
+                        &nbsp;Sponsoring Statistics
                       </Link>
                     </li>
-                    <li role="none">
-                      <Link
-                        role="menuitem"
-                        to="/spectrum-decoder-status"
-                        onClick={close}
-                      >
-                        Signaling Status
+                    <li
+                      className={
+                        pathname === '/spectrum-decoder-status' ? 'active' : ''
+                      }
+                    >
+                      <Link to="/spectrum-decoder-status" onClick={close}>
+                        <span className="glyphicon glyphicon-scale" />
+                        &nbsp;Signaling Status
                       </Link>
                     </li>
                   </>
                 )}
                 {!loading && authenticated && (
                   <>
-                    <li className="divider" aria-hidden />
-                    <li role="none">
-                      <Link role="menuitem" to="/account/edit" onClick={close}>
-                        Edit Profile
+                    <li role="separator" className="divider" />
+                    <li className={pathname === '/account/edit' ? 'active' : ''}>
+                      <Link to="/account/edit" onClick={close}>
+                        <span className="glyphicon glyphicon-user" /> Edit
+                        Profile
                       </Link>
                     </li>
-                    <li role="none">
-                      <Link role="menuitem" to="/sensor-token" onClick={close}>
+                    <li className={pathname === '/sensor-token' ? 'active' : ''}>
+                      <Link to="/sensor-token" onClick={close}>
+                        <span className="glyphicon glyphicon-barcode" />{' '}
                         Registration Token
                       </Link>
                     </li>
-                    <li role="none">
-                      <Link role="menuitem" to="/logout" onClick={close}>
-                        Logout
+                    <li className={pathname === '/logout' ? 'active' : ''}>
+                      <Link to="/logout" onClick={close}>
+                        <span className="glyphicon glyphicon-off" /> Logout
                       </Link>
                     </li>
                   </>
@@ -244,8 +264,8 @@ export function Navbar() {
               </ul>
             </li>
           </ul>
-        </nav>
+        </div>
       </div>
-    </header>
+    </nav>
   )
 }

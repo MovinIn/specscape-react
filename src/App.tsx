@@ -6,6 +6,7 @@ import { NotifierProvider } from './components/Notifier'
 import { Layout } from './layout/Layout'
 
 const LandingPage = lazy(() => import('./pages/LandingPage'))
+const ContributePage = lazy(() => import('./pages/ContributePage'))
 const FaqPage = lazy(() => import('./pages/FaqPage'))
 const HardwarePage = lazy(() => import('./pages/HardwarePage'))
 const DatasetsPage = lazy(() => import('./pages/DatasetsPage'))
@@ -52,6 +53,7 @@ function AppRoutes() {
         <Route element={<Layout />}>
           <Route index element={<LandingPage />} />
 
+          <Route path="contribute" element={<ContributePage />} />
           <Route path="faq" element={<FaqPage />} />
           <Route path="hardware" element={<HardwarePage />} />
           <Route path="datasets" element={<DatasetsPage />} />

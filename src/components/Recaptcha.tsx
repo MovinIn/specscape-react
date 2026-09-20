@@ -23,6 +23,7 @@ declare global {
 
 type RecaptchaProps = {
   onChange: (token: string | null) => void
+  hideLabel?: boolean
 }
 
 let scriptPromise: Promise<void> | null = null
@@ -51,7 +52,7 @@ function loadRecaptchaScript() {
   return scriptPromise
 }
 
-export function Recaptcha({ onChange }: RecaptchaProps) {
+export function Recaptcha({ onChange, hideLabel }: RecaptchaProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const widgetId = useRef<number | null>(null)
   const reactId = useId()
@@ -76,6 +77,10 @@ export function Recaptcha({ onChange }: RecaptchaProps) {
       cancelled = true
     }
   }, [onChange])
+
+  if (hideLabel) {
+    return <div ref={hostRef} aria-label="Captcha" />
+  }
 
   return (
     <div className="field">

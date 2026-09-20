@@ -13,10 +13,19 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    css: {
+      preprocessorOptions: {
+        scss: {
+          loadPaths: ['node_modules'],
+          quietDeps: true,
+          silenceDeprecations: ['import', 'global-builtin', 'color-functions'],
+        },
+      },
+    },
     server: {
       port: 5173,
       proxy: {
-        '/api': {
+        '^/api(/|$)': {
           target,
           changeOrigin: true,
           secure: false,

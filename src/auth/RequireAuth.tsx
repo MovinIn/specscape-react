@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext'
 /** Paths that do not require authentication (mirrors Angular whitelist). */
 export const PUBLIC_PATH_PREFIXES = [
   '/',
+  '/contribute',
   '/datasets',
   '/hardware',
   '/open-source',

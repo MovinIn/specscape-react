@@ -1,11 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import { PageHeader } from '../components/PageHeader'
 import { Recaptcha, resetRecaptcha } from '../components/Recaptcha'
 import { useNotify } from '../components/Notifier'
-
-type Status = 'idle' | 'sending' | 'sent' | 'error'
 
 export default function ContactPage() {
   const { show } = useNotify()
@@ -14,16 +10,15 @@ export default function ContactPage() {
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
   const [captcha, setCaptcha] = useState<string | null>(null)
-  const [status, setStatus] = useState<Status>('idle')
+  const [isWorking, setIsWorking] = useState(false)
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!captcha) {
-      setStatus('error')
-      show('Please complete the captcha.', 'error')
+      show('Please solve the captcha!', 'error')
       return
     }
-    setStatus('sending')
+    setIsWorking(true)
     try {
       await api.contactInquiry({
         name,
@@ -32,116 +27,138 @@ export default function ContactPage() {
         message,
         'g-recaptcha-response': captcha,
       })
-      setStatus('sent')
+      show('Thanks for your inquiry. We will answer as soon as possible!', 'info')
       setName('')
       setEmail('')
       setSubject('')
       setMessage('')
-      setCaptcha(null)
       resetRecaptcha()
-      show('Message sent', 'success')
+      setCaptcha(null)
     } catch {
-      setStatus('error')
+      show('Something went wrong. Please try again.', 'error')
       resetRecaptcha()
       setCaptcha(null)
-      show('Could not send message', 'error')
+    } finally {
+      setIsWorking(false)
     }
   }
 
   return (
-    <div className="page page-narrow">
-      <PageHeader
-        title="Contact"
-        lead="Questions, suggestions, partnerships, or sensor hosting—send a note."
-      />
-      <div className="prose stack">
-        <p>
-          Fill in every field. For sensor applications and kit questions you can
-          also start from <Link to="/join">Host a Sensor</Link>.
-        </p>
+    <div className="container">
+      <div className="row">
+        <div className="col-sm-12">
+          <div className="page-header">
+            <h2>Contact</h2>
+          </div>
 
-        <form className="panel stack form-grid" onSubmit={onSubmit}>
-          <div className="field">
-            <label className="label" htmlFor="contact-name">
-              Name
-            </label>
-            <input
-              id="contact-name"
-              className="input"
-              name="name"
-              type="text"
-              required
-              autoComplete="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={status === 'sending'}
-            />
-          </div>
-          <div className="field">
-            <label className="label" htmlFor="contact-email">
-              Email
-            </label>
-            <input
-              id="contact-email"
-              className="input"
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={status === 'sending'}
-            />
-          </div>
-          <div className="field">
-            <label className="label" htmlFor="contact-subject">
-              Subject
-            </label>
-            <input
-              id="contact-subject"
-              className="input"
-              name="subject"
-              type="text"
-              required
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              disabled={status === 'sending'}
-            />
-          </div>
-          <div className="field">
-            <label className="label" htmlFor="contact-message">
-              Message
-            </label>
-            <textarea
-              id="contact-message"
-              className="input"
-              name="message"
-              required
-              rows={8}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              disabled={status === 'sending'}
-            />
-          </div>
-          <Recaptcha onChange={setCaptcha} />
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={status === 'sending'}
-          >
-            {status === 'sending' ? 'Sending…' : 'Send message'}
-          </button>
-          {status === 'sent' ? (
-            <p className="success-banner" role="status">
-              Thanks—your message was delivered.
-            </p>
-          ) : null}
-          {status === 'error' ? (
-            <p className="error-banner" role="alert">
-              Something went wrong. Complete the captcha and try again.
-            </p>
-          ) : null}
-        </form>
+          <p>
+            If you have any questions, improvements, suggestions or general
+            remarks, feel free to contact us using the form below. You need
+            to fill out all the fields.
+          </p>
+
+          <form className="form-horizontal" onSubmit={submit}>
+            <fieldset disabled={isWorking}>
+              <div className="form-group">
+                <label className="col-md-4 control-label" htmlFor="name">
+                  Name
+                </label>
+                <div className="col-md-4">
+                  <input
+                    id="name"
+                    name="name"
+                    type="text"
+                    placeholder="full name"
+                    className="form-control input-md"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="col-md-4 control-label" htmlFor="email">
+                  Email Address
+                </label>
+                <div className="col-md-4">
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="email"
+                    className="form-control input-md"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="col-md-4 control-label" htmlFor="subject">
+                  Subject
+                </label>
+                <div className="col-md-4">
+                  <input
+                    id="subject"
+                    name="subject"
+                    type="text"
+                    placeholder="subject"
+                    className="form-control input-md"
+                    required
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="col-md-4 control-label" htmlFor="message">
+                  Message
+                </label>
+                <div className="col-md-4">
+                  <textarea
+                    className="form-control"
+                    cols={50}
+                    rows={10}
+                    id="message"
+                    name="message"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                  />
+                </div>
+              </div>
+            </fieldset>
+            <fieldset disabled={isWorking}>
+              <div className="form-group">
+                <label className="col-md-4 control-label" htmlFor="captcha">
+                  Captcha
+                </label>
+                <div className="col-md-4">
+                  <Recaptcha onChange={setCaptcha} hideLabel />
+                </div>
+              </div>
+            </fieldset>
+            <div className="form-group form-actions">
+              <div className="col-sm-offset-4 col-sm-4">
+                <button
+                  type="submit"
+                  className="btn btn-primary validate"
+                  disabled={isWorking}
+                >
+                  Send Email
+                </button>
+                {isWorking ? (
+                  <span>
+                    <span className="glyphicon glyphicon-refresh" />
+                    &nbsp;Delivering...
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   )
