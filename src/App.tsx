@@ -20,8 +20,7 @@ const WorkWithUsPage = lazy(() => import('./pages/WorkWithUsPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
 const ContactPage = lazy(() => import('./pages/ContactPage'))
-const LoginPage = lazy(() => import('./pages/LoginPage'))
-const LogoutPage = lazy(() => import('./pages/LogoutPage'))
+const AuthPage = lazy(() => import('./pages/AuthPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 const ActivatePage = lazy(() => import('./pages/ActivatePage'))
 const ReactivatePage = lazy(() => import('./pages/ReactivatePage'))
@@ -68,8 +67,8 @@ function AppRoutes() {
           <Route path="privacy-policy" element={<PrivacyPage />} />
           <Route path="contact" element={<ContactPage />} />
 
-          <Route path="login" element={<LoginPage />} />
-          <Route path="logout" element={<LogoutPage />} />
+          <Route path="login" element={<AuthPage />} />
+          <Route path="logout" element={<AuthPage />} />
           <Route path="account/register" element={<RegisterPage />} />
           <Route
             path="account/edit"

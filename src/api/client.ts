@@ -1,7 +1,9 @@
 import type {
+  AggregatedSpectrum,
   ContactPayload,
   NetworkStats,
   Principal,
+  RankingEntry,
   Sensor,
   SensorStatusEntry,
 } from './types'
@@ -62,23 +64,19 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let res: Response
   try {
     res = await fetch(`${API_ROOT}${path}`, {
+      // `no-store` keeps the browser from replaying stale API responses from
+      // its disk cache — including error pages cached from an earlier,
+      // misconfigured proxy target.
+      cache: 'no-store',
       ...init,
       headers,
       credentials: 'include',
     })
   } catch {
-    if (import.meta.env.DEV) return fromMock<T>(path)
     throw new Error(`Network error: ${path}`)
   }
 
   if (!res.ok) {
-    if (import.meta.env.DEV) {
-      try {
-        return fromMock<T>(path)
-      } catch {
-        /* fall through */
-      }
-    }
     let body: unknown
     try {
       body = await res.json()
@@ -102,7 +100,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!text) return undefined as T
 
   if (isHtmlPayload(text)) {
-    if (import.meta.env.DEV) return fromMock<T>(path)
     const err = new Error(`API returned HTML instead of JSON: ${path}`) as Error & {
       status?: number
     }
@@ -113,7 +110,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     return JSON.parse(text) as T
   } catch {
-    if (import.meta.env.DEV && method === 'GET') return fromMock<T>(path)
     throw new Error(`Invalid JSON from ${path}`)
   }
 }
@@ -130,34 +126,81 @@ function qs(params: Record<string, string | number | boolean | undefined>) {
 }
 
 export const api = {
+  /**
+   * GET /user/principal — the sole authentication endpoint.
+   *
+   * Pass a Basic auth header to log in; the server then sets the JSESSIONID
+   * session cookie and an XSRF-TOKEN cookie, which authenticate every
+   * subsequent request via `credentials: 'include'`.
+   *
+   * Note: this endpoint answers 200 even when unauthenticated, returning
+   * `{"admin":false,"username":null}`. Callers must check `username`, not
+   * the status code.
+   */
   getPrincipal(headers?: HeadersInit) {
     return (async () => {
-      try {
-        const res = await fetch(`${API_ROOT}/user/principal`, {
-          method: 'GET',
-          headers: mergeHeaders(headers),
-          credentials: 'include',
+      if (useMock) {
+        return new Response(JSON.stringify({ username: 'demo', admin: true }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer mock-jwt-demo',
+          },
         })
-        if (res.ok) {
-          const text = await res.clone().text()
-          if (!isHtmlPayload(text)) return res
-        }
-      } catch {
-        /* fall through to mock in DEV */
       }
 
-      if (!import.meta.env.DEV && !useMock) {
-        return new Response(null, { status: 401 })
-      }
-
-      mockGet('/user/profile')
-      return new Response(JSON.stringify({ username: 'demo', admin: true }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer mock-jwt-demo',
-        },
+      // `cache: 'no-store'` is essential: without it the browser will happily
+      // replay a stale principal response from disk (including an error page
+      // cached from a previously misconfigured proxy) and never hit the
+      // network, which makes auth appear permanently broken.
+      const res = await fetch(`${API_ROOT}/user/principal`, {
+        method: 'GET',
+        headers: mergeHeaders(headers),
+        credentials: 'include',
+        cache: 'no-store',
       })
+
+      if (!res.ok) return res
+
+      // Read the body once and rebuild the Response so callers always get a
+      // readable stream regardless of what we inspect here.
+      const text = await res.text()
+
+      if (isHtmlPayload(text)) {
+        console.warn(
+          '[api] /user/principal returned HTML, not JSON — the proxy is ' +
+            'almost certainly pointed at the wrong backend. Check ' +
+            'VITE_API_PROXY_TARGET in .env.local and restart the dev server ' +
+            '(make sure no stale vite process is still holding port 5173). ' +
+            'First 200 chars:',
+          text.slice(0, 200),
+        )
+        // Sending Basic auth can make some setups answer with a page rather
+        // than JSON, even though the credentials were accepted and the
+        // session cookie is now set. Re-read the principal over that plain
+        // session before treating this as a failure.
+        const retry = await fetch(`${API_ROOT}/user/principal`, {
+          method: 'GET',
+          headers: mergeHeaders(),
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        const retryText = await retry.text()
+        if (!isHtmlPayload(retryText)) {
+          return new Response(retryText, {
+            status: retry.status,
+            headers: retry.headers,
+          })
+        }
+        console.warn(
+          '[api] retry over the session cookie also returned HTML. ' +
+            'First 200 chars:',
+          retryText.slice(0, 200),
+        )
+        return new Response(null, { status: 502 })
+      }
+
+      return new Response(text, { status: res.status, headers: res.headers })
     })()
   },
 
@@ -167,6 +210,32 @@ export const api = {
 
   getStats() {
     return request<NetworkStats>('/network/stats')
+  },
+
+  /** Unix-second timestamps (midnight) for every day the network was online. */
+  getOnlineDays() {
+    return request<number[]>('/network/onlineDays')
+  },
+
+  getActiveTimes(begin = 0, end = 0, granularity = 3600) {
+    const timeEnd = end === 0 ? Math.floor(Date.now() / 1000) : end
+    return request<unknown>(
+      `/network/activeTimes${qs({ timeBegin: begin, timeEnd, granularity })}`,
+    )
+  },
+
+  getActiveSensors(begin = 0, end = 0, granularity = 3600) {
+    const timeEnd = end === 0 ? Math.floor(Date.now() / 1000) : end
+    return request<unknown>(
+      `/network/activeSensors${qs({ timeBegin: begin, timeEnd, granularity })}`,
+    )
+  },
+
+  getActiveHours(dayBegin = 0, dayEnd = 0) {
+    const end = dayEnd === 0 ? Math.floor(Date.now() / 1000) : dayEnd
+    return request<unknown>(
+      `/network/activeHours${qs({ dayBegin, dayEnd: end })}`,
+    )
   },
 
   getSensors() {
@@ -208,7 +277,7 @@ export const api = {
   },
 
   getRegistrationToken(force = false) {
-    return request<{ token?: string }>(
+    return request<{ value: string; validUntil: string | number }>(
       `/sensor/registration-token${force ? '?force=true' : ''}`,
     )
   },
@@ -221,8 +290,9 @@ export const api = {
     return request<number[]>('/network/ranking/months')
   },
 
+  /** `timestamp` is a YYYYMM month key, e.g. 202609. */
   getRanking(timestamp: number) {
-    return request<unknown[]>(`/network/ranking${qs({ timestamp })}`)
+    return request<RankingEntry[]>(`/network/ranking${qs({ timestamp })}`)
   },
 
   getIqDatasets(serial = 0) {
@@ -358,8 +428,30 @@ export const api = {
     })
   },
 
-  getSpectrum(params: Record<string, string | number>) {
-    return request(`/spectrum/aggregated${qs(params)}`)
+  /**
+   * Aggregated spectrum for one sensor. `extended=true` matches what the
+   * production UI sends and makes the response include the `bands` and
+   * `noiseFloor` fields.
+   */
+  getSpectrum(params: {
+    sensor: string | number
+    timeBegin: number
+    timeEnd: number
+    freqMin?: number
+    freqMax?: number
+    aggFreq: number
+    aggTime: number
+    aggFun?: 'AVG' | 'MAX'
+  }) {
+    return request<AggregatedSpectrum>(
+      `/spectrum/aggregated${qs({
+        freqMin: 20000000,
+        freqMax: 1700000000,
+        aggFun: 'AVG',
+        extended: true,
+        ...params,
+      })}`,
+    )
   },
 }
 

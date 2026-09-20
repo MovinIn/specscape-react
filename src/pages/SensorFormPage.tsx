@@ -141,7 +141,7 @@ export default function SensorFormPage() {
       position: {
         latitude: lat,
         longitude: lon,
-        altitude: Number.isFinite(altitude) ? altitude : null,
+        altitude: Number.isFinite(altitude) ? altitude : undefined,
         indoor: form.indoor,
       },
       latitude: lat,

@@ -248,12 +248,6 @@ export function Navbar() {
                         Profile
                       </Link>
                     </li>
-                    <li className={pathname === '/sensor-token' ? 'active' : ''}>
-                      <Link to="/sensor-token" onClick={close}>
-                        <span className="glyphicon glyphicon-barcode" />{' '}
-                        Registration Token
-                      </Link>
-                    </li>
                     <li className={pathname === '/logout' ? 'active' : ''}>
                       <Link to="/logout" onClick={close}>
                         <span className="glyphicon glyphicon-off" /> Logout

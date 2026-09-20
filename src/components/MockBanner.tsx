@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 /**
- * Shows once in DEV after mock API fallback engages.
+ * Shows once when the explicit mock API mode is active.
  */
 export function MockBanner() {
   const [show, setShow] = useState(false)
@@ -17,8 +17,8 @@ export function MockBanner() {
 
   return (
     <div className="mock-banner" role="status">
-      Live API unreachable — using mock data. Set{' '}
-      <code>VITE_API_PROXY_TARGET</code> when you have a working backend.
+      Mock API mode — showing fake data. Unset{' '}
+      <code>VITE_USE_MOCK_API</code> to use the real backend.
       <button type="button" className="btn btn-ghost" onClick={() => setShow(false)}>
         Dismiss
       </button>

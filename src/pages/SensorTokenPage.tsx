@@ -1,83 +1,95 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import PageHeader from '../components/PageHeader'
-import { useNotify } from '../components/Notifier'
+
+function formatRemaining(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
 
 export default function SensorTokenPage() {
-  const { show } = useNotify()
-  const [token, setToken] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [rotating, setRotating] = useState(false)
+  const [token, setToken] = useState<{ value: string } | null>(null)
+  const [expirationDate, setExpirationDate] = useState<number | null>(null)
+  const [expires, setExpires] = useState<string | null>(null)
+  const intervalRun = useRef(0)
 
-  const load = useCallback(async (force = false) => {
-    setError(null)
-    if (force) setRotating(true)
-    else setLoading(true)
-    try {
-      const res = await api.getRegistrationToken(force)
-      setToken(res?.token ?? null)
-      if (force) show('Registration token rotated', 'success')
-    } catch {
-      setError('Could not load registration token.')
-      setToken(null)
-      show('Token request failed', 'error')
-    } finally {
-      setLoading(false)
-      setRotating(false)
-    }
-  }, [show])
-
-  useEffect(() => {
-    void load(false)
-  }, [load])
-
-  async function copyToken() {
-    if (!token) return
-    try {
-      await navigator.clipboard.writeText(token)
-      show('Token copied', 'success')
-    } catch {
-      show('Could not copy token', 'error')
-    }
+  async function updateToken(force: boolean) {
+    const resp = await api.getRegistrationToken(force)
+    setToken({ value: resp.value })
+    setExpirationDate(new Date(resp.validUntil).getTime())
   }
 
+  function getToken() {
+    void updateToken(false)
+  }
+
+  function newToken() {
+    setToken(null)
+    setExpirationDate(null)
+    setExpires(null)
+    void updateToken(true)
+  }
+
+  useEffect(() => {
+    getToken()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (expirationDate == null) return
+
+      if (expirationDate <= Date.now()) {
+        setToken(null)
+        setExpirationDate(null)
+        setExpires(null)
+        getToken()
+        return
+      }
+
+      intervalRun.current += 1
+      if (intervalRun.current % 10 === 0) {
+        getToken()
+      }
+
+      setExpires(formatRemaining(expirationDate - Date.now()))
+    }, 500)
+    return () => window.clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expirationDate])
+
   return (
-    <div className="page page-narrow">
-      <PageHeader
-        title="Sensor registration token"
-        lead="Use this token when provisioning a new SpecScape sensor."
-      />
-      {error ? <div className="error-banner">{error}</div> : null}
-      {loading ? <p className="muted">Loading token…</p> : null}
-      {!loading && token ? (
-        <div className="panel stack">
-          <p className="muted">Current token</p>
-          <code style={{ wordBreak: 'break-all' }}>{token}</code>
-          <button type="button" className="btn btn-ghost" onClick={() => void copyToken()}>
-            Copy to clipboard
-          </button>
+    <div className="container">
+      <div className="row">
+        <div className="col-sm-12">
+          <h1>Sensor Registration Token</h1>
+
+          <p>
+            The sensor registration can be used to connect your sensor to
+            your SpecScape account.
+          </p>
+
+          {token !== null ? (
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: '3em' }}>{token.value}</p>
+              {expires !== null ? (
+                <p className="text-muted">expires in {expires}</p>
+              ) : null}
+
+              <button
+                className="btn btn-default btn-sm"
+                onClick={newToken}
+              >
+                New Token
+              </button>
+            </div>
+          ) : (
+            <div className="text-center">
+              <h4>Loading...</h4>
+            </div>
+          )}
         </div>
-      ) : null}
-      {!loading && !token && !error ? (
-        <p className="muted">No token available.</p>
-      ) : null}
-      <div className="stack" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={rotating || loading}
-          onClick={() => void load(true)}
-        >
-          {rotating ? 'Rotating…' : 'Rotate token'}
-        </button>
-        <Link className="btn btn-ghost" to="/sensors">
-          Back to sensors
-        </Link>
-        <Link className="btn btn-ghost" to="/sensor-setup">
-          Setup guide
-        </Link>
       </div>
     </div>
   )

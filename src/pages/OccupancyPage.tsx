@@ -2,19 +2,35 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { api } from '../api/client'
 import type { Sensor } from '../api/types'
 import PageHeader from '../components/PageHeader'
-import { extractSpectrumMatrix } from '../lib/spectrum'
+import {
+  extractSpectrumMatrix,
+  sensorOptions,
+  type SpectrumMatrix,
+} from '../lib/spectrum'
 
 /** Average power per frequency bin → occupancy % above threshold. */
-function occupancyFromMatrix(matrix: number[][], thresholdDb = -70): number[] {
+/**
+ * Percentage of samples above the threshold, per frequency bin. Cells with no
+ * measurement are excluded from both numerator and denominator so that a bin
+ * with no data reads as 0 samples rather than as 0% occupied.
+ */
+function occupancyFromMatrix(
+  matrix: SpectrumMatrix,
+  thresholdDb = -70,
+): number[] {
   const cols = matrix[0]?.length ?? 0
   if (!cols) return []
   const out: number[] = []
   for (let x = 0; x < cols; x++) {
     let hits = 0
+    let samples = 0
     for (const row of matrix) {
-      if ((row[x] ?? -999) > thresholdDb) hits++
+      const v = row[x]
+      if (typeof v !== 'number' || !Number.isFinite(v)) continue
+      samples++
+      if (v > thresholdDb) hits++
     }
-    out.push(matrix.length ? (hits / matrix.length) * 100 : 0)
+    out.push(samples ? (hits / samples) * 100 : 0)
   }
   return out
 }
@@ -68,7 +84,6 @@ export default function OccupancyPage() {
         aggFun: 'AVG',
         aggTime: 60,
         aggFreq: 100000,
-        extended: 'true',
       })
       const matrix = extractSpectrumMatrix(data)
       if (!matrix) {
@@ -102,14 +117,11 @@ export default function OccupancyPage() {
             required
           >
             <option value="">Select sensor…</option>
-            {sensors.map((s) => {
-              const id = s.serial ?? s.id
-              return (
-                <option key={String(id)} value={String(id)}>
-                  {s.name ?? id}
-                </option>
-              )
-            })}
+            {sensorOptions(sensors).map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
           </select>
         </div>
         <div className="field">

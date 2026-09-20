@@ -1,141 +1,176 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
-import PageHeader from '../components/PageHeader'
+import type { RankingEntry } from '../api/types'
+import { useAuth } from '../auth/AuthContext'
 
-type RankingRow = Record<string, unknown>
+type Mode = 'month' | 'year'
 
-function cell(row: RankingRow, keys: string[]): string {
-  for (const k of keys) {
-    const v = row[k]
-    if (v !== undefined && v !== null) return String(v)
-  }
-  return '—'
-}
+const MONTH_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
 
 export default function RankingPage() {
-  const [years, setYears] = useState<number[]>([])
-  const [months, setMonths] = useState<number[]>([])
-  const [year, setYear] = useState<number | ''>('')
-  const [month, setMonth] = useState<number | ''>('')
-  const [rows, setRows] = useState<RankingRow[]>([])
-  const [error, setError] = useState<string | null>(null)
+  const { user } = useAuth()
+  const [mode, setMode] = useState<Mode>('month')
+  const [monthsAvail, setMonthsAvail] = useState<number[]>([])
+  const [yearsAvail, setYearsAvail] = useState<number[]>([])
+  const [selected, setSelected] = useState<number | null>(null)
+  const [rows, setRows] = useState<RankingEntry[] | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      try {
-        const [y, m] = await Promise.all([api.getRankingYears(), api.getRankingMonths()])
-        if (cancelled) return
-        setYears(y ?? [])
-        setMonths(m ?? [])
-        if (y?.length) setYear(y[0])
-        if (m?.length) setMonth(m[0])
-      } catch {
-        if (!cancelled) setError('Could not load ranking periods.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
+      const [months, years] = await Promise.all([
+        api.getRankingMonths().catch(() => [] as number[]),
+        api.getRankingYears().catch(() => [] as number[]),
+      ])
+      if (cancelled) return
+      const m = Array.isArray(months) ? [...months].sort((a, b) => b - a) : []
+      const y = Array.isArray(years) ? [...years].sort((a, b) => b - a) : []
+      setMonthsAvail(m)
+      setYearsAvail(y)
+      // Default to the most recent period with data.
+      setSelected(m[0] ?? y[0] ?? null)
     })()
     return () => {
       cancelled = true
     }
   }, [])
 
-  const timestamp = useMemo(() => {
-    if (year === '' || month === '') return null
-    return Date.UTC(Number(year), Number(month) - 1, 1) / 1000
-  }, [year, month])
+  const load = useCallback(async (timestamp: number) => {
+    setLoading(true)
+    setRows(null)
+    try {
+      const data = await api.getRanking(timestamp)
+      setRows(Array.isArray(data) ? data : [])
+    } catch {
+      setRows([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    if (timestamp === null) return
-    let cancelled = false
-    ;(async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const data = await api.getRanking(timestamp)
-        if (cancelled) return
-        setRows(Array.isArray(data) ? (data as RankingRow[]) : [])
-      } catch {
-        if (!cancelled) setError('Could not load ranking.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
+    if (selected == null) return
+    void load(selected)
+  }, [selected, load])
+
+  const options = useMemo(
+    () => (mode === 'month' ? monthsAvail : yearsAvail),
+    [mode, monthsAvail, yearsAvail],
+  )
+
+  // Keep the selection valid when switching between month and year mode.
+  useEffect(() => {
+    if (options.length === 0) return
+    if (selected == null || !options.includes(selected)) {
+      setSelected(options[0])
     }
-  }, [timestamp])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, options])
+
+  function labelFor(value: number): string {
+    if (mode === 'year') return String(value)
+    const year = Math.floor(value / 100)
+    const month = (value % 100) - 1
+    return `${MONTH_NAMES[month] ?? '?'} ${year}`
+  }
 
   return (
-    <div className="page page-wide">
-      <PageHeader title="Sensor ranking" lead="Contribution ranking by period." />
-      <div className="stack form-grid">
-        <div className="field">
-          <label className="label" htmlFor="rank-year">
-            Year
-          </label>
-          <select
-            id="rank-year"
-            className="input"
-            value={year}
-            onChange={(e) => setYear(e.target.value ? Number(e.target.value) : '')}
-          >
-            <option value="">—</option>
-            {years.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label" htmlFor="rank-month">
-            Month
-          </label>
-          <select
-            id="rank-month"
-            className="input"
-            value={month}
-            onChange={(e) => setMonth(e.target.value ? Number(e.target.value) : '')}
-          >
-            <option value="">—</option>
-            {months.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
+    <div className="container">
+      <div className="row">
+        <div className="col-sm-12">
+          <h1>Ranking</h1>
+
+          <div className="row">
+            <div className="col-sm-4 col-sm-offset-8">
+              <div className="btn-group" style={{ float: 'left' }}>
+                <button
+                  type="button"
+                  className={`btn btn-primary${mode === 'month' ? ' active' : ''}`}
+                  onClick={() => setMode('month')}
+                >
+                  Month
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-primary${mode === 'year' ? ' active' : ''}`}
+                  onClick={() => setMode('year')}
+                >
+                  Year
+                </button>
+              </div>
+              <p className="input-group">
+                <select
+                  className="form-control"
+                  value={selected ?? ''}
+                  onChange={(e) => setSelected(Number(e.target.value))}
+                >
+                  {options.map((v) => (
+                    <option key={v} value={v}>
+                      {labelFor(v)}
+                    </option>
+                  ))}
+                </select>
+                <span className="input-group-btn">
+                  <button type="button" className="btn btn-default" disabled>
+                    <i className="glyphicon glyphicon-calendar" />
+                  </button>
+                </span>
+              </p>
+            </div>
+          </div>
+
+          {loading && (
+            <div className="text-center">
+              <h4>Loading...</h4>
+            </div>
+          )}
+
+          {!loading && rows !== null && rows.length === 0 && (
+            <div className="text-center">
+              <h5>No ranking data for the selected time.</h5>
+            </div>
+          )}
+
+          {!loading && rows !== null && rows.length > 0 && (
+            <table className="table table-striped">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Sensor</th>
+                  <th>Username</th>
+                  <th>Sensing Time (percent)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const mine = r.uid === user?.username
+                  const top = r.rankAvailability === 1 && !mine
+                  return (
+                    <tr
+                      key={`${r.serial}-${r.rankAvailability}`}
+                      className={mine ? 'info' : top ? 'success' : undefined}
+                    >
+                      <td>{r.rankAvailability}</td>
+                      <td>{r.name}</td>
+                      <td>{r.uid}</td>
+                      <td>
+                        {typeof r.availability === 'number'
+                          ? r.availability.toFixed(2)
+                          : '—'}
+                        %
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
-      {error ? <div className="error-banner">{error}</div> : null}
-      {loading ? <p className="muted">Loading…</p> : null}
-      <table className="table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Sensor / owner</th>
-            <th>Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i}>
-              <td>{cell(row, ['rank', 'position', 'index']) || String(i + 1)}</td>
-              <td>{cell(row, ['name', 'sensorName', 'username', 'owner'])}</td>
-              <td>{cell(row, ['score', 'points', 'value'])}</td>
-            </tr>
-          ))}
-          {!loading && rows.length === 0 ? (
-            <tr>
-              <td colSpan={3} className="muted">
-                No ranking data.
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
     </div>
   )
 }

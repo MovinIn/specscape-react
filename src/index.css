@@ -770,3 +770,64 @@ span.sw-default-value-header {
   font-weight: normal;
   font-size: 1.1em;
 }
+
+/* —— Sensors page (sensormap port) —— */
+
+.table-pointer tbody tr {
+  cursor: pointer;
+}
+
+.sensors-map-col {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.sensors-map-col .leaflet-map {
+  height: 100%;
+  min-height: 0;
+}
+
+/* Lightweight stand-in for angular-ui-bootstrap's $uibModal. */
+.modal-backdrop-custom {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 15px;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-dialog-custom {
+  width: 100%;
+  max-width: 900px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+
+.modal-dialog-custom .modal-header,
+.modal-dialog-custom .modal-footer {
+  padding: 15px;
+}
+
+.modal-dialog-custom .modal-header {
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.modal-dialog-custom .modal-footer {
+  border-top: 1px solid #e5e5e5;
+  text-align: right;
+}
+
+.modal-dialog-custom .modal-body {
+  padding: 15px;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.modal-dialog-custom .modal-body td {
+  word-break: break-word;
+}

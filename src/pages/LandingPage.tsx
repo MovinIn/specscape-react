@@ -1,51 +1,53 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import type { NetworkStats, Sensor } from '../api/types'
+import type { Sensor } from '../api/types'
 import LeafletMap, { type MapMarker } from '../components/LeafletMap'
 
 export default function LandingPage() {
-  const [stats, setStats] = useState<NetworkStats | null>(null)
-  const [sensors, setSensors] = useState<Sensor[]>([])
+  // /network/stats is public and carries the full sensor list plus the user
+  // count, so it alone drives the counters and the map (matching index.js).
+  const [allSensors, setAllSensors] = useState<Sensor[]>([])
+  const [numUsers, setNumUsers] = useState<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
     api
       .getStats()
       .then((data) => {
-        if (!cancelled) setStats(data)
+        if (cancelled) return
+        setAllSensors(Array.isArray(data?.sensors) ? data.sensors : [])
+        setNumUsers(
+          typeof data?.num_users === 'number' ? data.num_users : null,
+        )
       })
       .catch(() => {
-        if (!cancelled) setStats(null)
-      })
-    api
-      .getSensors()
-      .then((list) => {
-        if (!cancelled) setSensors(Array.isArray(list) ? list : [])
-      })
-      .catch(() => {
-        if (!cancelled) setSensors([])
+        if (cancelled) return
+        setAllSensors([])
+        setNumUsers(null)
       })
     return () => {
       cancelled = true
     }
   }, [])
 
-  const registered =
-    typeof stats?.sensors === 'number' ? stats.sensors : sensors.length || '—'
-  const users = typeof stats?.users === 'number' ? stats.users : '—'
-  const online =
-    typeof stats?.online === 'number'
-      ? stats.online
-      : typeof stats?.sensorsOnline === 'number'
-        ? stats.sensorsOnline
-        : '—'
+  const sensingSensors = useMemo(
+    () => allSensors.filter((s) => s.sensing),
+    [allSensors],
+  )
+
+  const registered = allSensors.length || '—'
+  const online = allSensors.length ? sensingSensors.length : '—'
+  const users = numUsers ?? '—'
 
   const markers = useMemo(() => {
     const out: MapMarker[] = []
-    for (const s of sensors) {
-      const lat = Number(s.latitude ?? s.lat)
-      const lon = Number(s.longitude ?? s.lon)
+    for (const s of sensingSensors) {
+      const pos = s.position as
+        | { latitude?: number; longitude?: number }
+        | undefined
+      const lat = Number(pos?.latitude ?? s.latitude ?? s.lat)
+      const lon = Number(pos?.longitude ?? s.longitude ?? s.lon)
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue
       out.push({
         id: String(s.serial ?? s.id ?? `${lat},${lon}`),
@@ -56,7 +58,7 @@ export default function LandingPage() {
       })
     }
     return out
-  }, [sensors])
+  }, [sensingSensors])
 
   return (
     <>

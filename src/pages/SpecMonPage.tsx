@@ -7,13 +7,35 @@ import {
   averageSpectrumRow,
   extractSpectrumMatrix,
   formatHz,
+  matrixRange,
+  sensorOptions,
   toUnixSeconds,
+  type SpectrumMatrix,
 } from '../lib/spectrum'
 
-function drawWaterfall(
-  canvas: HTMLCanvasElement,
-  matrix: number[][],
-) {
+/**
+ * Classic SDR waterfall colormap: dark blue -> cyan -> green -> yellow -> red,
+ * matching the look of the original es-waterfall renderer.
+ */
+function colormap(t: number): [number, number, number] {
+  const c = Math.min(1, Math.max(0, t))
+  if (c < 0.25) {
+    const k = c / 0.25
+    return [0, Math.round(k * 160), Math.round(60 + k * 195)]
+  }
+  if (c < 0.5) {
+    const k = (c - 0.25) / 0.25
+    return [0, Math.round(160 + k * 95), Math.round(255 - k * 255)]
+  }
+  if (c < 0.75) {
+    const k = (c - 0.5) / 0.25
+    return [Math.round(k * 255), 255, 0]
+  }
+  const k = (c - 0.75) / 0.25
+  return [255, Math.round(255 - k * 255), 0]
+}
+
+function drawWaterfall(canvas: HTMLCanvasElement, matrix: SpectrumMatrix) {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
   const rows = matrix.length
@@ -23,22 +45,24 @@ function drawWaterfall(
   canvas.width = cols
   canvas.height = rows
   const image = ctx.createImageData(cols, rows)
-  let min = Infinity
-  let max = -Infinity
-  for (const row of matrix) {
-    for (const v of row) {
-      if (v < min) min = v
-      if (v > max) max = v
-    }
-  }
+  const { min, max } = matrixRange(matrix)
   const span = max - min || 1
+
   let i = 0
   for (let y = 0; y < rows; y++) {
+    const row = matrix[y]
     for (let x = 0; x < cols; x++) {
-      const t = (matrix[y][x] - min) / span
-      const r = Math.floor(20 + t * 200)
-      const g = Math.floor(80 + t * 160)
-      const b = Math.floor(120 + t * 100)
+      const v = row?.[x]
+      if (typeof v !== 'number' || !Number.isFinite(v)) {
+        // No measurement for this bin — render it as background, not as a
+        // bogus minimum-power sample.
+        image.data[i++] = 17
+        image.data[i++] = 17
+        image.data[i++] = 17
+        image.data[i++] = 255
+        continue
+      }
+      const [r, g, b] = colormap((v - min) / span)
       image.data[i++] = r
       image.data[i++] = g
       image.data[i++] = b
@@ -50,7 +74,7 @@ function drawWaterfall(
 
 function drawBarPlot(
   canvas: HTMLCanvasElement,
-  values: number[],
+  values: (number | null)[],
   freqMin: number,
   freqMax: number,
 ) {
@@ -73,9 +97,11 @@ function drawBarPlot(
   let min = Infinity
   let max = -Infinity
   for (const v of values) {
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue
     if (v < min) min = v
     if (v > max) max = v
   }
+  if (min === Infinity) return
   const span = max - min || 1
 
   ctx.clearRect(0, 0, cssW, cssH)
@@ -91,9 +117,13 @@ function drawBarPlot(
 
   const barW = plotW / values.length
   for (let i = 0; i < values.length; i++) {
-    const t = (values[i] - min) / span
+    const v = values[i]
+    // Leave a gap where there was no measurement rather than drawing a bar.
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue
+    const t = (v - min) / span
     const h = t * plotH
-    ctx.fillStyle = `rgb(${Math.floor(20 + t * 200)},${Math.floor(140 + t * 80)},${Math.floor(180 - t * 40)})`
+    const [r, g, b] = colormap(t)
+    ctx.fillStyle = `rgb(${r},${g},${b})`
     ctx.fillRect(padL + i * barW, padT + plotH - h, Math.max(1, barW - 0.5), h)
   }
 
@@ -115,7 +145,7 @@ export default function SpecMonPage() {
   const [freqMax, setFreqMax] = useState(searchParams.get('freqMax') ?? '1700000000')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [matrix, setMatrix] = useState<number[][] | null>(null)
+  const [matrix, setMatrix] = useState<SpectrumMatrix | null>(null)
   const [summary, setSummary] = useState<string | null>(null)
   const [hoverDb, setHoverDb] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -158,14 +188,7 @@ export default function SpecMonPage() {
     )
   }, [avgSpectrum, freqMin, freqMax])
 
-  const sensorOptions = useMemo(
-    () =>
-      sensors.map((s) => {
-        const id = s.serial ?? s.id
-        return { id, label: s.name ?? String(id) }
-      }),
-    [sensors],
-  )
+  const options = useMemo(() => sensorOptions(sensors), [sensors])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -188,7 +211,7 @@ export default function SpecMonPage() {
       const now = Math.floor(Date.now() / 1000)
       const begin = toUnixSeconds(from) ?? now - 3600
       const end = toUnixSeconds(to) ?? now
-      const params: Record<string, string | number> = {
+      const data = await api.getSpectrum({
         sensor: sensorId,
         timeBegin: begin,
         timeEnd: end,
@@ -196,10 +219,10 @@ export default function SpecMonPage() {
         freqMax: Number(freqMax) || 1_700_000_000,
         aggFun: 'AVG',
         aggTime: 60,
-        aggFreq: 100000,
-        extended: 'true',
-      }
-      const data = await api.getSpectrum(params)
+        // 10 MHz bins over the full range, matching what the production UI
+        // requests; 100 kHz here would ask for ~17k columns and be rejected.
+        aggFreq: 10_000_000,
+      })
       const m = extractSpectrumMatrix(data)
       if (m) {
         setMatrix(m)
@@ -231,7 +254,12 @@ export default function SpecMonPage() {
     const fMin = Number(freqMin) || 0
     const fMax = Number(freqMax) || 1
     const freq = fMin + (idx / Math.max(1, avgSpectrum.length - 1)) * (fMax - fMin)
-    setHoverDb(`${formatHz(freq)} · ${avgSpectrum[idx].toFixed(2)} dB`)
+    const v = avgSpectrum[idx]
+    setHoverDb(
+      typeof v === 'number' && Number.isFinite(v)
+        ? `${formatHz(freq)} · ${v.toFixed(2)} dB`
+        : `${formatHz(freq)} · no data`,
+    )
   }
 
   return (
@@ -253,8 +281,8 @@ export default function SpecMonPage() {
             required
           >
             <option value="">Select sensor…</option>
-            {sensorOptions.map((s) => (
-              <option key={String(s.id)} value={String(s.id)}>
+            {options.map((s) => (
+              <option key={s.id} value={s.id}>
                 {s.label}
               </option>
             ))}

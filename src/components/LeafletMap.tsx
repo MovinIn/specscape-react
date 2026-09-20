@@ -1,4 +1,5 @@
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet'
+import { useEffect, useRef } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl
@@ -24,6 +25,10 @@ type LeafletMapProps = {
   onMapClick?: (lat: number, lon: number) => void
   center?: [number, number]
   zoom?: number
+  /** Marker id to pan to and open, mirroring the original's highlightSensor. */
+  selectedId?: string
+  /** Fit the viewport to all markers once they first load. */
+  fitToMarkers?: boolean
 }
 
 const EUROPE_CENTER: [number, number] = [50.0, 10.0]
@@ -42,6 +47,48 @@ function MapClickHandler({
   return null
 }
 
+/** Pans the map to the selected marker when the selection changes. */
+function SelectionFocus({
+  markers,
+  selectedId,
+}: {
+  markers: MapMarker[]
+  selectedId?: string
+}) {
+  const map = useMap()
+  useEffect(() => {
+    if (!selectedId) return
+    const target = markers.find((m) => String(m.id) === selectedId)
+    if (target) map.setView([target.lat, target.lon], Math.max(map.getZoom(), 9))
+  }, [map, markers, selectedId])
+  return null
+}
+
+/** Fits the viewport to all markers once they first arrive. */
+function FitToMarkers({
+  markers,
+  enabled,
+}: {
+  markers: MapMarker[]
+  enabled: boolean
+}) {
+  const map = useMap()
+  const done = useRef(false)
+  useEffect(() => {
+    if (!enabled || done.current || markers.length === 0) return
+    done.current = true
+    if (markers.length === 1) {
+      map.setView([markers[0].lat, markers[0].lon], 9)
+      return
+    }
+    map.fitBounds(
+      markers.map((m) => [m.lat, m.lon] as [number, number]),
+      { padding: [40, 40], maxZoom: 12 },
+    )
+  }, [map, markers, enabled])
+  return null
+}
+
 export default function LeafletMap({
   markers,
   height = 420,
@@ -49,6 +96,8 @@ export default function LeafletMap({
   onMapClick,
   center = EUROPE_CENTER,
   zoom = DEFAULT_ZOOM,
+  selectedId,
+  fitToMarkers = false,
 }: LeafletMapProps) {
   const styleHeight = typeof height === 'number' ? `${height}px` : height
 
@@ -65,6 +114,8 @@ export default function LeafletMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapClickHandler onMapClick={onMapClick} />
+        <SelectionFocus markers={markers} selectedId={selectedId} />
+        <FitToMarkers markers={markers} enabled={fitToMarkers} />
         {markers.map((m) => (
           <Marker
             key={String(m.id)}

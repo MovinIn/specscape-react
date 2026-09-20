@@ -68,9 +68,8 @@ export const MOCK_STATUS: SensorStatusEntry[] = MOCK_SENSORS.map((s) => ({
 }))
 
 export const MOCK_STATS: NetworkStats = {
-  sensors: MOCK_SENSORS.length,
-  users: 42,
-  online: MOCK_SENSORS.filter((s) => s.sensing).length,
+  sensors: MOCK_SENSORS,
+  num_users: 42,
 }
 
 /** Simple synthetic spectrum matrix (time × freq). */
@@ -104,7 +103,7 @@ export function warnMockOnce() {
   if (mockWarned || !import.meta.env.DEV) return
   mockWarned = true
   console.warn(
-    '[specscape] Live API unreachable (TLS/HTML). Using mock data. Set VITE_API_PROXY_TARGET or fix electrosense.org SSL.',
+    '[specscape] VITE_USE_MOCK_API is set — serving mock data instead of the real API.',
   )
   window.dispatchEvent(new Event('specscape:mock-api'))
 }
@@ -229,7 +228,10 @@ export function mockGet(path: string): unknown | undefined {
     return { values: mockSpectrumMatrix(), mock: true, generatedAt: now }
   }
   if (bare === '/sensor/registration-token') {
-    return { token: 'mock-registration-token-demo' }
+    return {
+      value: 'MOCK-1234-5678',
+      validUntil: Date.now() + 5 * 60 * 1000,
+    }
   }
   return undefined
 }

@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { LiveWaterfall } from '../components/LiveWaterfall'
 import PageHeader from '../components/PageHeader'
+import { sensorOptions } from '../lib/spectrum'
 import { decodeData, encodeCmd } from '../streaming/deser'
 import { Signaling, type SignalingSensor } from '../streaming/Signaling'
 import { WebRTCConnection } from '../streaming/WebRTCConnection'
@@ -313,14 +314,11 @@ export default function SpectrumDecoderPage() {
             <option value="">
               {sensors.length ? 'Select sensor…' : 'Connect to load sensors'}
             </option>
-            {sensors.map((s) => {
-              const id = String(s.id ?? s.serial ?? '')
-              return (
-                <option key={id} value={id}>
-                  {String(s.name ?? id)}
-                </option>
-              )
-            })}
+            {sensorOptions(sensors).map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
           </select>
         </div>
 
