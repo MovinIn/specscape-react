@@ -831,3 +831,99 @@ span.sw-default-value-header {
 .modal-dialog-custom .modal-body td {
   word-break: break-word;
 }
+
+/* —— Spectrum Monitor (specmon port) —— */
+
+.es-sbar {
+  background-color: #f7f7f7;
+  font-family: monospace;
+  font-size: 10pt;
+  text-align: right;
+  margin-bottom: 5px;
+  min-height: 38px;
+  padding: 2px;
+}
+
+.es-sbar-val {
+  background-color: #efefef;
+  font-weight: bold;
+  margin: 2px;
+  padding: 2px;
+  display: inline-block;
+}
+
+.es-msgbox {
+  margin: 5px 5px 0 15px;
+  text-align: center;
+  font-family: monospace;
+}
+
+.es-left-btn {
+  margin: 2px 5px 0 5px;
+  display: inline-block;
+  float: left;
+}
+
+.es-center {
+  text-align: center;
+}
+
+.es-loader {
+  background: url('/images/eq_loader.gif') no-repeat top left;
+  display: inline-block;
+  width: 87px;
+  height: 25px;
+  margin: 5px;
+  font-family: monospace;
+}
+
+#es-specmap-labels {
+  margin-left: 140px;
+}
+
+.freq-label {
+  cursor: pointer;
+  margin: 2px;
+  border: 1px solid;
+  font-size: 9pt;
+  color: #fff;
+  padding: 1px 2px 2px 2px;
+  display: inline-block;
+}
+
+.freq-label:hover {
+  background-color: limegreen;
+  font-weight: bold;
+  z-index: 1000;
+}
+
+.waterfall-msg {
+  position: absolute;
+  top: 20%;
+  left: 0;
+  width: 100%;
+  opacity: 0.8;
+  text-align: center;
+  background: whitesmoke;
+  padding: 5px;
+  font-size: 24px;
+  font-variant: small-caps;
+  font-weight: bold;
+}
+
+#es-specmap-container-2 {
+  cursor: pointer;
+}
+
+.es-waterfall-wrap {
+  position: relative;
+}
+
+.es-specmap-canvas {
+  background-color: #ffffff;
+  text-align: center;
+  margin-top: 15px;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}

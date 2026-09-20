@@ -1,10 +1,15 @@
 /** Shared spectrum / frequency helpers for SpecMon & occupancy. */
 
-export function formatHz(hz: number): string {
-  if (hz >= 1e9) return `${(hz / 1e9).toFixed(2)} GHz`
-  if (hz >= 1e6) return `${(hz / 1e6).toFixed(2)} MHz`
-  if (hz >= 1e3) return `${(hz / 1e3).toFixed(1)} kHz`
-  return `${hz} Hz`
+/** Matches the original `printHzUnit`: 2 decimals, no space before the unit. */
+export function formatHz(hz: number | null | undefined): string {
+  let v = hz ?? 0
+  const prefixes = ['', 'k', 'M', 'G']
+  let i = 0
+  while (Math.abs(v) >= 1000 && i < prefixes.length - 1) {
+    v /= 1000
+    i++
+  }
+  return `${v.toFixed(2)}${prefixes[i]}Hz`
 }
 
 /** A spectrum cell is a dB value, or null where no measurement exists. */
