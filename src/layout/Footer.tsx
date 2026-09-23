@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 
 export function Footer() {
   return (
-    <footer className="text-muted footer">
+    <footer className="text-muted footer navbar-fixed-bottom">
       © The SpecScape Network |{' '}
       <a
         href="https://github.com/electrosense"

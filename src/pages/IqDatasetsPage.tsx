@@ -1,88 +1,82 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Sensor } from '../api/types'
-import PageHeader from '../components/PageHeader'
+import { AccordionPanel } from '../components/AccordionPanel'
 
-type IqDataset = {
-  name?: string
-  path?: string
-  url?: string
+type Dataset = {
+  id?: string | number
+  modified?: string | number
+  firstMeasurement?: string | number | null
+  lastMeasurement?: string | number | null
+  centerFrequency?: number
+  antennaGain?: number
+  samplingRate?: number
   size?: number
-  modified?: string | number | Date
-  firstMeasurement?: string | number | Date
-  lastMeasurement?: string | number | Date
-  [key: string]: unknown
 }
 
-type DatasetsBySerial = Record<string, IqDataset[]>
+const UNITS = ['bytes', 'KB', 'MB', 'GB', 'TB', 'PB']
 
-function asDate(value: unknown): Date | null {
-  if (value == null) return null
-  if (value instanceof Date) return value
-  const d = new Date(value as string | number)
-  return Number.isFinite(d.getTime()) ? d : null
-}
-
-function formatWhen(value: unknown): string {
-  const d = asDate(value)
-  return d ? d.toLocaleString() : '—'
-}
-
-function formatBytes(n?: number): string {
-  if (n == null || !Number.isFinite(n)) return '—'
-  if (n < 1024) return `${n} B`
-  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`
-  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`
-  return `${(n / 1024 ** 3).toFixed(2)} GB`
-}
-
-function normalizeDatasets(raw: unknown): DatasetsBySerial {
-  if (!raw) return {}
-  if (Array.isArray(raw)) {
-    const grouped: DatasetsBySerial = { all: raw as IqDataset[] }
-    return grouped
+/** Exact port of `filesize` filter in iq-datasets.js. */
+function filesize(bytes: number | undefined): string {
+  if (bytes == null || Number.isNaN(bytes) || !Number.isFinite(bytes)) return '?'
+  let unit = 0
+  let b = bytes
+  while (b >= 1024) {
+    b /= 1024
+    unit++
   }
-  if (typeof raw === 'object') {
-    const out: DatasetsBySerial = {}
-    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-      out[k] = Array.isArray(v) ? (v as IqDataset[]) : []
-    }
-    return out
-  }
-  return {}
+  return `${b.toFixed(0)} ${UNITS[unit]}`
 }
 
+function formatDate(value: string | number | null | undefined, withMs: boolean): string {
+  if (value == null) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number, len = 2) => String(n).padStart(len, '0')
+  const base = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+    d.getHours(),
+  )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  return withMs ? `${base}.${pad(d.getMilliseconds(), 3)}` : base
+}
+
+/** Exact port of iq-datasets.html / iq-datasets.js (IqDatasetsController). */
 export default function IqDatasetsPage() {
-  const [bySerial, setBySerial] = useState<DatasetsBySerial>({})
-  const [sensors, setSensors] = useState<Record<string, Sensor>>({})
-  const [open, setOpen] = useState<Record<string, boolean>>({})
-  const [error, setError] = useState<string | null>(null)
+  const [datasets, setDatasets] = useState<Record<string, Dataset[]>>({})
+  const [senInfo, setSenInfo] = useState<Record<string, Sensor>>({})
+  const [accordion, setAccordion] = useState<Record<string, boolean>>({})
+  const [collapsed, setCollapsed] = useState(true)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
-        const [raw, list] = await Promise.all([
+        const [rawDatasets, sensors] = await Promise.all([
           api.getIqDatasets(),
-          api.getSensors().catch(() => [] as Sensor[]),
+          api.getSensors(),
         ])
         if (cancelled) return
-        const grouped = normalizeDatasets(raw)
+
         const info: Record<string, Sensor> = {}
-        for (const s of list ?? []) {
+        for (const s of sensors ?? []) {
           if (s.serial != null) info[String(s.serial)] = s
         }
-        setSensors(info)
-        setBySerial(grouped)
-        const initial: Record<string, boolean> = {}
-        for (const [k, sets] of Object.entries(grouped)) {
-          if (sets.length) initial[k] = false
+        setSenInfo(info)
+
+        const raw = (rawDatasets ?? {}) as Record<string, Dataset[]>
+        const nextAccordion: Record<string, boolean> = {}
+        const grouped: Record<string, Dataset[]> = {}
+        for (const [serial, sets] of Object.entries(raw)) {
+          const list = Array.isArray(sets) ? sets : []
+          if (list.length > 0) nextAccordion[serial] = false
+          grouped[serial] = list
         }
-        setOpen(initial)
-      } catch {
-        if (!cancelled) setError('Could not load IQ datasets.')
+        setDatasets(grouped)
+        setAccordion(nextAccordion)
+      } catch (err) {
+        console.error(err)
+        if (!cancelled) setError('Could not retrieve data')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -93,136 +87,206 @@ export default function IqDatasetsPage() {
   }, [])
 
   const serials = useMemo(
-    () =>
-      Object.keys(bySerial)
-        .filter((k) => (bySerial[k]?.length ?? 0) > 0)
-        .sort(),
-    [bySerial],
+    () => Object.keys(datasets).filter((k) => (datasets[k]?.length ?? 0) > 0),
+    [datasets],
   )
+  const hasData = serials.length > 0
 
-  const allOpen = serials.length > 0 && serials.every((s) => open[s])
+  function toggleAccordion() {
+    setAccordion((prev) => {
+      const next: Record<string, boolean> = {}
+      for (const k of Object.keys(prev)) next[k] = collapsed
+      return next
+    })
+    setCollapsed((c) => !c)
+  }
 
-  function toggleAll() {
-    const next = !allOpen
-    setOpen((prev) => {
-      const copy = { ...prev }
-      for (const s of serials) copy[s] = next
-      return copy
+  function setOpen(serial: string, open: boolean) {
+    setAccordion((prev) => {
+      const next = { ...prev, [serial]: open }
+      const allOpen = Object.values(next).every(Boolean)
+      const allClosed = Object.values(next).every((v) => !v)
+      if (allOpen) setCollapsed(false)
+      if (allClosed) setCollapsed(true)
+      return next
     })
   }
 
   return (
-    <div className="page page-wide">
-      <PageHeader
-        title="I/Q datasets"
-        lead="Recorded captures grouped by sensor — download when links are available."
-      />
-      {error ? <div className="error-banner">{error}</div> : null}
-      {loading ? <p className="muted">Loading datasets…</p> : null}
+    <div className="container">
+      <div className="row">
+        <div className="col-sm-12">
+          <h1>IQ Data Sets</h1>
 
-      {serials.length > 0 ? (
-        <div className="stack">
-          <button type="button" className="btn btn-ghost" onClick={toggleAll}>
-            {allOpen ? 'Collapse all' : 'Expand all'}
-          </button>
-        </div>
-      ) : null}
+          <p>
+            Here you can find all accessible I/Q measurements for your
+            sensors. You can download them in two different formats:
+          </p>
+          <ul>
+            <li>
+              <strong>Avro</strong> - contains meta-information and
+              measurement data. Avro is a widely-used binary serialization
+              format which became popular within the Hadoop eco-system.
+            </li>
+            <li>
+              <strong>Raw</strong> - contains only I/Q samples as a sequence
+              of 32bit float values (little endian). If your processing
+              pipeline or analysis tool cannot deal with Avro, this might be
+              a good fit.
+            </li>
+          </ul>
 
-      <div className="stack">
-        {serials.map((serial) => {
-          const sets = bySerial[serial] ?? []
-          const sensor = sensors[serial]
-          const title = sensor?.name
-            ? `${sensor.name} (${serial})`
-            : `Sensor ${serial}`
-          const isOpen = Boolean(open[serial])
-          return (
-            <section key={serial} className="panel">
+          {!hasData && !loading ? (
+            <p
+              className="text-center text-muted"
+              style={{ margin: '2em', fontSize: '14pt' }}
+            >
+              No measurements available ☹
+            </p>
+          ) : null}
+          {loading ? (
+            <p
+              className="text-center text-muted"
+              style={{ margin: '2em', fontSize: '14pt' }}
+            >
+              Loading...
+            </p>
+          ) : null}
+
+          {error ? <div className="alert alert-danger">☹ {error}</div> : null}
+
+          {hasData ? (
+            <p className="text-right">
               <button
+                className="btn btn-default btn-xs"
                 type="button"
-                className="btn btn-ghost"
-                style={{ width: '100%', justifyContent: 'space-between' }}
-                aria-expanded={isOpen}
-                onClick={() =>
-                  setOpen((prev) => ({ ...prev, [serial]: !prev[serial] }))
-                }
+                onClick={toggleAccordion}
               >
-                <span>
-                  {title}{' '}
-                  <span className="muted">· {sets.length} dataset(s)</span>
-                </span>
-                <span aria-hidden>{isOpen ? '−' : '+'}</span>
+                <span
+                  className={`glyphicon ${
+                    !collapsed ? 'glyphicon-chevron-down' : 'glyphicon-chevron-right'
+                  }`}
+                />
+                &nbsp;
+                {collapsed ? 'Expand' : 'Collapse'} all
               </button>
-              {isOpen ? (
-                <div className="table-wrap" style={{ marginTop: '0.75rem' }}>
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>First</th>
-                        <th>Last</th>
-                        <th>Modified</th>
-                        <th>Size</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sets.map((ds, i) => {
-                        const href =
-                          typeof ds.url === 'string'
-                            ? ds.url
-                            : typeof ds.path === 'string'
-                              ? ds.path
-                              : null
-                        return (
-                          <tr key={String(ds.name ?? ds.path ?? i)}>
-                            <td>{String(ds.name ?? `Dataset ${i + 1}`)}</td>
-                            <td className="muted">
-                              {formatWhen(ds.firstMeasurement)}
-                            </td>
-                            <td className="muted">
-                              {formatWhen(ds.lastMeasurement)}
-                            </td>
-                            <td className="muted">{formatWhen(ds.modified)}</td>
-                            <td className="muted">
-                              {formatBytes(
-                                typeof ds.size === 'number' ? ds.size : undefined,
-                              )}
-                            </td>
-                            <td>
-                              {href ? (
-                                <a
-                                  className="btn btn-ghost"
-                                  href={href}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  Download
-                                </a>
-                              ) : (
-                                <Link
-                                  className="btn btn-ghost"
-                                  to={`/specmon?sensor=${serial}`}
-                                >
-                                  SpecMon
-                                </Link>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-            </section>
-          )
-        })}
-      </div>
+            </p>
+          ) : null}
 
-      {!loading && serials.length === 0 ? (
-        <p className="muted">No I/Q datasets found for your account.</p>
-      ) : null}
+          {serials.map((serial) => {
+            const measurements = datasets[serial] ?? []
+            const info = senInfo[serial]
+            return (
+              <AccordionPanel
+                key={serial}
+                heading={`Sensor ${info?.name ?? serial}`}
+                open={accordion[serial] ?? false}
+                onToggle={(open) => setOpen(serial, open)}
+              >
+                {info ? (
+                  <dl className="dl-horizontal">
+                    <dt>Serial/MAC</dt>
+                    <dd>{String(info.serial)}</dd>
+                    <dt>User</dt>
+                    <dd>{info.uid}</dd>
+                    <dt>Address</dt>
+                    <dd>{info.address}</dd>
+                    <dt>Country</dt>
+                    <dd>{info.country}</dd>
+                  </dl>
+                ) : null}
+
+                <table className="table table-condensed table-striped">
+                  <thead>
+                    <tr>
+                      <th>First Measurement</th>
+                      <th>Last Measurement</th>
+                      <th>Center Frequency</th>
+                      <th>Antenna Gain</th>
+                      <th>Sampling Rate</th>
+                      <th>File Size</th>
+                      <th>Download</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {measurements.map((m, i) => (
+                      <tr key={String(m.id ?? i)}>
+                        {m.firstMeasurement ? (
+                          <td>{formatDate(m.firstMeasurement, true)}</td>
+                        ) : (
+                          <td>
+                            <span className="text-muted">unknown</span>
+                          </td>
+                        )}
+
+                        {m.lastMeasurement ? (
+                          <td>{formatDate(m.lastMeasurement, true)}</td>
+                        ) : (
+                          <td>{formatDate(m.modified, false)}</td>
+                        )}
+
+                        {m.centerFrequency ? (
+                          <td>{m.centerFrequency / 1_000_000}MHz</td>
+                        ) : (
+                          <td>
+                            <span className="text-muted">unknown</span>
+                          </td>
+                        )}
+
+                        {m.antennaGain ? (
+                          <td>{m.antennaGain}dB</td>
+                        ) : (
+                          <td>
+                            <span className="text-muted">unknown</span>
+                          </td>
+                        )}
+
+                        {m.samplingRate ? (
+                          <td>
+                            {m.samplingRate >= 1_000_000 ? (
+                              <span>{(m.samplingRate / 1_000_000).toFixed(3)}MS</span>
+                            ) : (
+                              <span>{m.samplingRate}/s</span>
+                            )}
+                          </td>
+                        ) : (
+                          <td>
+                            <span className="text-muted">unknown</span>
+                          </td>
+                        )}
+
+                        <td>{filesize(m.size)}</td>
+                        <td>
+                          <a
+                            className="btn btn-sm btn-default"
+                            title="Download as Raw File. Please be patient. The download might need a few seconds to start."
+                            href={`/api/iq/download/raw?serial=${serial}&dataset=${m.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <span className="glyphicon glyphicon-floppy-save" />
+                            &nbsp;Raw
+                          </a>{' '}
+                          <a
+                            className="btn btn-sm btn-primary"
+                            title="Download as Avro"
+                            href={`/api/iq/download/avro?serial=${serial}&dataset=${m.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <span className="glyphicon glyphicon-floppy-save" />
+                            &nbsp;Avro
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </AccordionPanel>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

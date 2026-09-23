@@ -296,7 +296,7 @@ export const api = {
   },
 
   getIqDatasets(serial = 0) {
-    return request<unknown[]>(`/iq/datasets${qs({ serial })}`)
+    return request<Record<string, unknown[]>>(`/iq/datasets${qs({ serial })}`)
   },
 
   getCurrentCampaigns() {

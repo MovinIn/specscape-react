@@ -4,6 +4,9 @@ type AccordionPanelProps = {
   heading: ReactNode
   defaultOpen?: boolean
   children: ReactNode
+  /** Controlled mode: when provided, this value drives open state instead of internal state. */
+  open?: boolean
+  onToggle?: (open: boolean) => void
 }
 
 /** Bootstrap 3 panel-group accordion item (mirrors angular-ui-bootstrap's uib-accordion-group). */
@@ -11,8 +14,17 @@ export function AccordionPanel({
   heading,
   defaultOpen = false,
   children,
+  open: controlledOpen,
+  onToggle,
 }: AccordionPanelProps) {
-  const [open, setOpen] = useState(defaultOpen)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen)
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : uncontrolledOpen
+
+  function toggle() {
+    if (isControlled) onToggle?.(!open)
+    else setUncontrolledOpen((v) => !v)
+  }
 
   return (
     <div className="panel panel-default">
@@ -21,7 +33,7 @@ export function AccordionPanel({
           type="button"
           className="accordion-toggle"
           aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
+          onClick={toggle}
         >
           {heading}{' '}
           <span

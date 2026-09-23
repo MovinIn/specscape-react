@@ -5,11 +5,15 @@ export type SignalingSensor = {
   [key: string]: unknown
 }
 
+/** Sensor id -> rtc status string (e.g. "offline"/"ready"/"clientConnected"/"campaignRunning"). */
+export type SensorStatusMap = Record<string, string>
+
 type SignalingHandlers = {
   onConnected?: () => void
   onDisconnected?: () => void
-  onSensors?: (sensors: SignalingSensor[]) => void
-  onSensorStatus?: (msg: unknown) => void
+  /** `sensors` message payload: { [sensorId]: status }, not a list. */
+  onSensors?: (sensors: SensorStatusMap) => void
+  onSensorStatus?: (msg: { sensorId?: string | number; status?: string }) => void
   onCoinsReport?: (coins: number) => void
   onAuthenticationFailed?: () => void
   onConnectionOffer?: (msg: unknown) => void
@@ -27,7 +31,8 @@ export class Signaling {
   private token: string
   private handlers: SignalingHandlers
 
-  sensors: SignalingSensor[] = []
+  /** Sensor id -> rtc status, as last received from the `sensors` message. */
+  sensors: SensorStatusMap = {}
 
   constructor(token: string, handlers: SignalingHandlers = {}) {
     this.token = token
@@ -36,7 +41,12 @@ export class Signaling {
 
   async connect(wssUri: string) {
     this.close()
-    this.ws = new WebSocket(wssUri)
+    try {
+      this.ws = new WebSocket(wssUri)
+    } catch (err) {
+      this.handlers.onDisconnected?.()
+      throw err
+    }
     this.ws.addEventListener('open', () => {
       this.authenticate(this.token)
       this.handlers.onConnected?.()
@@ -63,7 +73,7 @@ export class Signaling {
 
     switch (msg.fn) {
       case 'sensors':
-        this.sensors = (msg.sensors as SignalingSensor[]) ?? []
+        this.sensors = (msg.sensors as SensorStatusMap) ?? {}
         this.handlers.onSensors?.(this.sensors)
         break
       case 'connectionOffer':
@@ -73,7 +83,9 @@ export class Signaling {
         this.handlers.onIceCandidateForClient?.(msg)
         break
       case 'sensorStatus':
-        this.handlers.onSensorStatus?.(msg)
+        this.handlers.onSensorStatus?.(
+          msg as { sensorId?: string | number; status?: string },
+        )
         break
       case 'authResponse':
         if (msg.status === 'ok') {

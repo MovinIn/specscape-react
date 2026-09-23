@@ -4,6 +4,12 @@ const SITE_KEY =
   import.meta.env.VITE_RECAPTCHA_SITE_KEY ??
   '6Le0YsEsAAAAACcuLJClCmiFl9T8ztBlBNFPEE27'
 
+// Temporary switch until we have access to the Google account that owns the
+// production site key (it's registered for specscape.org only, not
+// localhost). Set VITE_DISABLE_RECAPTCHA=true to skip loading the widget
+// entirely and auto-supply a placeholder token so forms remain submittable.
+const RECAPTCHA_DISABLED = import.meta.env.VITE_DISABLE_RECAPTCHA === 'true'
+
 declare global {
   interface Window {
     grecaptcha?: {
@@ -58,6 +64,10 @@ export function Recaptcha({ onChange, hideLabel }: RecaptchaProps) {
   const reactId = useId()
 
   useEffect(() => {
+    if (RECAPTCHA_DISABLED) {
+      onChange('recaptcha-disabled-dev-placeholder')
+      return
+    }
     let cancelled = false
     ;(async () => {
       try {
@@ -77,6 +87,15 @@ export function Recaptcha({ onChange, hideLabel }: RecaptchaProps) {
       cancelled = true
     }
   }, [onChange])
+
+  if (RECAPTCHA_DISABLED) {
+    const notice = (
+      <div className="alert alert-warning" style={{ marginBottom: 0 }}>
+        Captcha disabled (dev mode) — pending Google account access.
+      </div>
+    )
+    return hideLabel ? notice : <div className="field">{notice}</div>
+  }
 
   if (hideLabel) {
     return <div ref={hostRef} aria-label="Captcha" />

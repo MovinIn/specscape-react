@@ -13,7 +13,7 @@ export function Layout() {
       <DocumentTitle />
       <Navbar />
       <MockBanner />
-      <main className="site-main">
+      <main className="site-main" style={{ marginBottom: 70 }}>
         <Outlet />
       </main>
       <Footer />
