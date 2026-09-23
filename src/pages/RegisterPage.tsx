@@ -1,281 +1,623 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useMatch, useNavigate } from 'react-router-dom'
+import { useMatch } from 'react-router-dom'
 import { api } from '../api/client'
-import PageHeader from '../components/PageHeader'
 import { Recaptcha, resetRecaptcha } from '../components/Recaptcha'
 import { useNotify } from '../components/Notifier'
 
-type FormState = {
+type UserForm = {
+  fullName: string
   uid: string
   mail: string
   confirmMail: string
-  fullName: string
   userPassword: string
   confirmPassword: string
-  currentPassword: string
+  organization: string
+  postalAddress: string
+  city: string
+  country: string
+  telephoneNumber: string
 }
 
-const empty: FormState = {
+const emptyUser: UserForm = {
+  fullName: '',
   uid: '',
   mail: '',
   confirmMail: '',
-  fullName: '',
   userPassword: '',
   confirmPassword: '',
-  currentPassword: '',
+  organization: '',
+  postalAddress: '',
+  city: '',
+  country: '',
+  telephoneNumber: '',
 }
 
+/** Exact port of register.html / register.js (EsRegisterController). */
 export default function RegisterPage() {
   const editMatch = useMatch('/account/edit')
-  const isEdit = Boolean(editMatch)
-  const navigate = useNavigate()
-  const { show } = useNotify()
+  const notifier = useNotify()
 
-  const [form, setForm] = useState<FormState>(empty)
+  const [editMode, setEditMode] = useState(false)
+  const [passwordTabActive, setPasswordTabActive] = useState(false)
+  const [beforeEditMail, setBeforeEditMail] = useState('')
+  const [tos, setTos] = useState(false)
+  const [editModePassword, setEditModePassword] = useState('')
+
+  const [user, setUser] = useState<UserForm>(emptyUser)
+  const [pw, setPw] = useState({
+    currentPassword: '',
+    newPassword: '',
+    newPasswordConfirmed: '',
+  })
+
   const [captcha, setCaptcha] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-  const [loading, setLoading] = useState(isEdit)
-  const [submitting, setSubmitting] = useState(false)
+  const [widgetKey, setWidgetKey] = useState(0)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
+    const isEdit = Boolean(editMatch)
+    setEditMode(isEdit)
     if (!isEdit) return
     let cancelled = false
     ;(async () => {
       try {
-        const account = (await api.getAccount()) as {
-          uid?: string
+        const account = (await api.getAccount()) as Partial<UserForm> & {
           mail?: string
-          fullName?: string
-          username?: string
         }
         if (cancelled) return
-        setForm((f) => ({
-          ...f,
-          uid: account?.uid ?? account?.username ?? '',
-          mail: account?.mail ?? '',
-          confirmMail: account?.mail ?? '',
-          fullName: account?.fullName ?? '',
-        }))
-      } catch {
-        if (!cancelled) setError('Could not load account profile.')
-      } finally {
-        if (!cancelled) setLoading(false)
+        setUser((u) => ({ ...u, ...account, confirmMail: account.mail ?? '' }))
+        setBeforeEditMail(account.mail ?? '')
+      } catch (err) {
+        console.error(err)
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [isEdit])
+  }, [editMatch])
 
-  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((f) => ({ ...f, [key]: value }))
+  function update<K extends keyof UserForm>(key: K, value: UserForm[K]) {
+    setUser((u) => ({ ...u, [key]: value }))
   }
 
-  async function onSubmit(e: FormEvent) {
+  async function passwordChangeSubmit(e: FormEvent) {
     e.preventDefault()
-    setError(null)
-    setSuccess(null)
-
-    if (!isEdit) {
-      if (form.mail !== form.confirmMail) {
-        setError('Email addresses do not match.')
-        return
-      }
-      if (form.userPassword !== form.confirmPassword) {
-        setError('Passwords do not match.')
-        return
-      }
-      if (!captcha) {
-        setError('Please complete the captcha.')
-        return
-      }
+    if (pw.newPassword !== pw.newPasswordConfirmed) {
+      notifier.show("The new passwords don't match!", 'error')
+      return
     }
-
-    setSubmitting(true)
+    setLoading(true)
     try {
-      if (isEdit) {
-        await api.updateAccount({
-          currentPassword: form.currentPassword,
-          newDetails: {
-            uid: form.uid,
-            mail: form.mail,
-            fullName: form.fullName,
-          },
-        })
-        setSuccess('Your account was updated.')
-        show('Profile updated', 'success')
+      const resp = (await api.updatePassword(pw)) as unknown as
+        | { data?: string[] }
+        | undefined
+      notifier.reset()
+      if (resp?.data?.length) {
+        resp.data.forEach((msg) => notifier.show(msg, 'info'))
       } else {
-        await api.registerAccount({
-          user: {
-            uid: form.uid,
-            mail: form.mail,
-            confirmMail: form.confirmMail,
-            fullName: form.fullName,
-            userPassword: form.userPassword,
-            confirmPassword: form.confirmPassword,
-          },
-          'g-recaptcha-response': captcha ?? undefined,
-        })
-        const msg =
-          'Account created. Activate via the email we sent before signing in.'
-        setSuccess(msg)
-        show(msg, 'success')
-        resetRecaptcha()
-        window.setTimeout(() => navigate('/login', { replace: true }), 2500)
+        notifier.show('Password updated', 'info')
       }
     } catch (err) {
-      resetRecaptcha()
-      setCaptcha(null)
-      const data = (err as { data?: unknown })?.data
-      const message = Array.isArray(data)
-        ? data.join(' ')
-        : typeof data === 'string'
-          ? data
-          : isEdit
-            ? 'Could not update profile.'
-            : 'Registration failed.'
-      setError(message)
-      show(message, 'error')
+      notifier.reset()
+      notifier.onPromiseRejected(err)
     } finally {
-      setSubmitting(false)
+      setLoading(false)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="page">
-        <PageHeader title="Edit profile" />
-        <p className="muted">Loading account…</p>
-      </div>
-    )
+  async function registerSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (editMode) {
+      notifier.reset()
+      let valid = true
+      if (user.mail !== beforeEditMail && user.mail !== user.confirmMail) {
+        notifier.show('Mail addresses do not match!', 'error')
+        valid = false
+      }
+      if (!valid) return
+
+      setLoading(true)
+      try {
+        const resp = (await api.updateAccount({
+          currentPassword: editModePassword,
+          newDetails: user,
+        })) as unknown as { status?: number; data?: string[] }
+        notifier.reset()
+        if (resp?.status === 200) {
+          if (resp.data?.length) {
+            resp.data.forEach((msg) => notifier.show(msg, 'info'))
+          } else {
+            notifier.show('Your account was updated!', 'info')
+          }
+        } else if (resp?.data?.length) {
+          resp.data.forEach((msg) => notifier.show(msg, 'error'))
+        } else {
+          notifier.show(
+            'There was a problem updating your account! Please try again later.',
+            'error',
+          )
+        }
+      } catch {
+        notifier.reset()
+        notifier.show(
+          'There was a problem updating your account! Please try again later.',
+          'error',
+        )
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      notifier.reset()
+      let valid = true
+      if (user.mail !== user.confirmMail) {
+        notifier.show('Mail addresses do not match!', 'error')
+        valid = false
+      }
+      if (user.userPassword !== user.confirmPassword) {
+        notifier.show('Passwords do not match!', 'error')
+        valid = false
+      }
+      if (!captcha) {
+        notifier.show('Please solve the captcha!', 'warn')
+        valid = false
+      }
+      if (!valid) return
+
+      setLoading(true)
+      try {
+        await api.registerAccount({
+          user,
+          'g-recaptcha-response': captcha ?? undefined,
+        })
+        notifier.reset()
+        notifier.show(
+          'Account successfully created. Before you can log in, you need to activate your ' +
+            'account using the link in the mail we just sent you. If you cannot find your activation mail,' +
+            ' please check your spam folder.',
+          'info',
+        )
+        resetRecaptcha()
+        setWidgetKey((k) => k + 1)
+        setCaptcha(null)
+      } catch (err) {
+        notifier.reset()
+        notifier.onPromiseRejected(err)
+        resetRecaptcha()
+        setWidgetKey((k) => k + 1)
+        setCaptcha(null)
+      } finally {
+        setLoading(false)
+      }
+    }
   }
 
   return (
-    <div className="page page-narrow">
-      <PageHeader
-        title={isEdit ? 'Edit profile' : 'Create account'}
-        lead={
-          isEdit
-            ? 'Update your SpecScape account details.'
-            : 'Register to manage sensors and spectrum data.'
-        }
-      />
-      {error ? <div className="error-banner">{error}</div> : null}
-      {success ? <div className="success-banner">{success}</div> : null}
-      <form className="stack form-grid" onSubmit={onSubmit}>
-        <div className="field">
-          <label className="label" htmlFor="reg-uid">
-            Username
-          </label>
-          <input
-            id="reg-uid"
-            className="input"
-            value={form.uid}
-            onChange={(e) => update('uid', e.target.value)}
-            required
-            disabled={isEdit}
-            autoComplete="username"
-          />
-        </div>
-        <div className="field">
-          <label className="label" htmlFor="reg-fullname">
-            Full name
-          </label>
-          <input
-            id="reg-fullname"
-            className="input"
-            value={form.fullName}
-            onChange={(e) => update('fullName', e.target.value)}
-            autoComplete="name"
-          />
-        </div>
-        <div className="field">
-          <label className="label" htmlFor="reg-mail">
-            Email
-          </label>
-          <input
-            id="reg-mail"
-            className="input"
-            type="email"
-            value={form.mail}
-            onChange={(e) => update('mail', e.target.value)}
-            required
-            autoComplete="email"
-          />
-        </div>
-        {!isEdit ? (
-          <div className="field">
-            <label className="label" htmlFor="reg-confirm-mail">
-              Confirm email
-            </label>
-            <input
-              id="reg-confirm-mail"
-              className="input"
-              type="email"
-              value={form.confirmMail}
-              onChange={(e) => update('confirmMail', e.target.value)}
-              required
-            />
+    <div className="container">
+      <div className="row">
+        <div className="col-sm-12">
+          <div className="page-header">
+            {!editMode ? <h2>Create a SpecScape Account</h2> : <h2>Edit Profile</h2>}
           </div>
-        ) : null}
-        {isEdit ? (
-          <div className="field">
-            <label className="label" htmlFor="reg-current-password">
-              Current password
-            </label>
-            <input
-              id="reg-current-password"
-              className="input"
-              type="password"
-              value={form.currentPassword}
-              onChange={(e) => update('currentPassword', e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </div>
-        ) : (
-          <>
-            <div className="field">
-              <label className="label" htmlFor="reg-password">
-                Password
-              </label>
-              <input
-                id="reg-password"
-                className="input"
-                type="password"
-                value={form.userPassword}
-                onChange={(e) => update('userPassword', e.target.value)}
-                required
-                autoComplete="new-password"
-              />
+
+          {editMode ? (
+            <div style={{ marginBottom: 20 }}>
+              <ul className="nav nav-tabs">
+                <li
+                  role="presentation"
+                  className={!passwordTabActive ? 'active' : ''}
+                  onClick={() => setPasswordTabActive(false)}
+                >
+                  <a href="#">Update Profile Data</a>
+                </li>
+                <li
+                  role="presentation"
+                  className={passwordTabActive ? 'active' : ''}
+                  onClick={() => setPasswordTabActive(true)}
+                >
+                  <a href="#">Change Password</a>
+                </li>
+              </ul>
             </div>
-            <div className="field">
-              <label className="label" htmlFor="reg-confirm">
-                Confirm password
-              </label>
-              <input
-                id="reg-confirm"
-                className="input"
-                type="password"
-                value={form.confirmPassword}
-                onChange={(e) => update('confirmPassword', e.target.value)}
-                required
-                autoComplete="new-password"
-              />
-            </div>
-            <Recaptcha onChange={setCaptcha} />
-          </>
-        )}
-        <button className="btn btn-primary" type="submit" disabled={submitting}>
-          {submitting ? 'Saving…' : isEdit ? 'Save profile' : 'Register'}
-        </button>
-      </form>
-      {!isEdit ? (
-        <p className="muted">
-          Already have an account? <Link to="/login">Sign in</Link>
-        </p>
-      ) : null}
+          ) : null}
+
+          {loading ? (
+            <div className="text-center">Processing registration...</div>
+          ) : null}
+
+          {!loading && !(editMode && passwordTabActive) ? (
+            <form className="form-horizontal" onSubmit={registerSubmit}>
+              <fieldset>
+                <legend>Mandatory Information</legend>
+
+                <div className="form-group">
+                  <label className="col-md-4 control-label" htmlFor="full_name">
+                    Full Name
+                  </label>
+                  <div className="col-md-4">
+                    <input
+                      id="full_name"
+                      name="full_name"
+                      type="text"
+                      placeholder="full name"
+                      className="form-control input-md"
+                      required
+                      value={user.fullName}
+                      onChange={(e) => update('fullName', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="col-md-4 control-label" htmlFor="username">
+                    Username
+                  </label>
+                  <div className="col-md-4">
+                    <input
+                      id="username"
+                      name="username"
+                      type="text"
+                      placeholder="username"
+                      className="form-control input-md"
+                      required
+                      disabled={editMode}
+                      value={user.uid}
+                      onChange={(e) => update('uid', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="col-md-4 control-label" htmlFor="email">
+                    Email Address
+                  </label>
+                  <div className="col-md-4">
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      placeholder="email"
+                      className="form-control input-md"
+                      required
+                      value={user.mail}
+                      onChange={(e) => update('mail', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {!editMode || user.mail !== beforeEditMail ? (
+                  <div className="form-group">
+                    <label className="col-md-4 control-label" htmlFor="email_confirm">
+                      Confirm Email
+                    </label>
+                    <div className="col-md-4">
+                      <input
+                        id="email_confirm"
+                        name="email_confirm"
+                        type="email"
+                        placeholder="email"
+                        className="form-control input-md"
+                        required
+                        value={user.confirmMail}
+                        onChange={(e) => update('confirmMail', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                {editMode && user.mail !== beforeEditMail ? (
+                  <div className="form-group">
+                    <div className="col-md-4 col-md-offset-4">
+                      <p>
+                        After changing your email address a confirmation mail will be
+                        sent and you{' '}
+                        <span style={{ fontWeight: 'bold' }}>
+                          need to re-activate your account
+                        </span>{' '}
+                        by clicking the link in this email!
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {!editMode ? (
+                  <>
+                    <div className="form-group">
+                      <label className="col-md-4 control-label" htmlFor="password">
+                        Password
+                      </label>
+                      <div className="col-md-4">
+                        <input
+                          id="password"
+                          name="password"
+                          type="password"
+                          placeholder="password"
+                          className="form-control input-md"
+                          required
+                          value={user.userPassword}
+                          onChange={(e) => update('userPassword', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label
+                        className="col-md-4 control-label"
+                        htmlFor="password_confirm"
+                      >
+                        Confirm Password
+                      </label>
+                      <div className="col-md-4">
+                        <input
+                          id="password_confirm"
+                          name="password_confirm"
+                          type="password"
+                          placeholder="password"
+                          className="form-control input-md"
+                          required
+                          value={user.confirmPassword}
+                          onChange={(e) => update('confirmPassword', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+              </fieldset>
+
+              <fieldset>
+                <legend>Optional Information</legend>
+                <p>These might be useful for contacting you in case of technical problems</p>
+
+                <div className="form-group">
+                  <label className="col-md-4 control-label" htmlFor="organization">
+                    Organization
+                  </label>
+                  <div className="col-md-4">
+                    <input
+                      id="organization"
+                      name="organization"
+                      type="text"
+                      placeholder="organization"
+                      className="form-control input-md"
+                      value={user.organization}
+                      onChange={(e) => update('organization', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="col-md-4 control-label" htmlFor="address">
+                    Address
+                  </label>
+                  <div className="col-md-4">
+                    <input
+                      id="address"
+                      name="address"
+                      type="text"
+                      placeholder="address"
+                      className="form-control input-md"
+                      value={user.postalAddress}
+                      onChange={(e) => update('postalAddress', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="col-md-4 control-label" htmlFor="city">
+                    City
+                  </label>
+                  <div className="col-md-4">
+                    <input
+                      id="city"
+                      name="city"
+                      type="text"
+                      placeholder="city"
+                      className="form-control input-md"
+                      value={user.city}
+                      onChange={(e) => update('city', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="col-md-4 control-label" htmlFor="country">
+                    Country
+                  </label>
+                  <div className="col-md-4">
+                    <input
+                      id="country"
+                      name="country"
+                      type="text"
+                      placeholder="country"
+                      className="form-control input-md"
+                      value={user.country}
+                      onChange={(e) => update('country', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="col-md-4 control-label" htmlFor="phone">
+                    Phone
+                  </label>
+                  <div className="col-md-4">
+                    <input
+                      id="phone"
+                      name="phone"
+                      type="text"
+                      placeholder="+44 (000) 1111"
+                      className="form-control input-md"
+                      value={user.telephoneNumber}
+                      onChange={(e) => update('telephoneNumber', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {!editMode ? (
+                  <div className="form-group">
+                    <label className="col-md-4 control-label" htmlFor="tos">
+                      Terms of Service
+                    </label>
+                    <div className="col-md-4">
+                      <label className="checkbox-inline" htmlFor="tos">
+                        <input
+                          type="checkbox"
+                          name="tos"
+                          id="tos"
+                          value="yes"
+                          required
+                          checked={tos}
+                          onChange={(e) => setTos(e.target.checked)}
+                        />
+                        By checking this box, I confirm that I have read and I agree to
+                        the{' '}
+                        <a href="/terms-of-service" target="_blank" rel="noreferrer">
+                          Terms of Service
+                        </a>
+                        .
+                      </label>
+                    </div>
+                  </div>
+                ) : null}
+              </fieldset>
+
+              {!editMode ? (
+                <fieldset>
+                  <div className="form-group">
+                    <label className="col-md-4 control-label">Captcha</label>
+                    <div className="col-md-4">
+                      <Recaptcha key={widgetKey} onChange={setCaptcha} hideLabel />
+                    </div>
+                  </div>
+                </fieldset>
+              ) : null}
+
+              {editMode ? (
+                <fieldset>
+                  <legend>Confirm password</legend>
+                  <p>Please enter your current password</p>
+                  <div className="form-group">
+                    <label
+                      className="col-md-4 control-label"
+                      htmlFor="editModePassword"
+                    >
+                      Password
+                    </label>
+                    <div className="col-md-4">
+                      <input
+                        id="editModePassword"
+                        name="password"
+                        type="password"
+                        placeholder="password"
+                        className="form-control input-md"
+                        required
+                        value={editModePassword}
+                        onChange={(e) => setEditModePassword(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </fieldset>
+              ) : null}
+
+              {editMode ? (
+                <div className="form-group form-actions">
+                  <div className="col-sm-offset-4 col-sm-8">
+                    <input type="submit" className="btn btn-primary" value="Update" />
+                  </div>
+                </div>
+              ) : (
+                <div className="form-group form-actions">
+                  <div className="col-sm-offset-4 col-sm-8">
+                    <input
+                      type="submit"
+                      className="btn btn-primary"
+                      value="Register"
+                    />
+                  </div>
+                </div>
+              )}
+            </form>
+          ) : null}
+
+          {!loading && editMode && passwordTabActive ? (
+            <form className="form-horizontal" onSubmit={passwordChangeSubmit}>
+              <fieldset>
+                <legend>Change Password</legend>
+
+                <div className="form-group">
+                  <label
+                    className="col-md-4 control-label"
+                    htmlFor="change_password_old"
+                  >
+                    Current Password
+                  </label>
+                  <div className="col-md-4">
+                    <input
+                      id="change_password_old"
+                      name="password"
+                      type="password"
+                      placeholder="current password"
+                      className="form-control input-md"
+                      required
+                      value={pw.currentPassword}
+                      onChange={(e) =>
+                        setPw((p) => ({ ...p, currentPassword: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="col-md-4 control-label" htmlFor="change_password">
+                    New Password
+                  </label>
+                  <div className="col-md-4">
+                    <input
+                      id="change_password"
+                      name="password"
+                      type="password"
+                      placeholder="new password"
+                      className="form-control input-md"
+                      required
+                      value={pw.newPassword}
+                      onChange={(e) =>
+                        setPw((p) => ({ ...p, newPassword: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label
+                    className="col-md-4 control-label"
+                    htmlFor="change_password_confirm"
+                  >
+                    Confirm New Password
+                  </label>
+                  <div className="col-md-4">
+                    <input
+                      id="change_password_confirm"
+                      name="password_confirm"
+                      type="password"
+                      placeholder="new password"
+                      className="form-control input-md"
+                      required
+                      value={pw.newPasswordConfirmed}
+                      onChange={(e) =>
+                        setPw((p) => ({ ...p, newPasswordConfirmed: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group form-actions">
+                  <div className="col-sm-offset-4 col-sm-8">
+                    <input type="submit" className="btn btn-primary" value="Submit" />
+                  </div>
+                </div>
+              </fieldset>
+            </form>
+          ) : null}
+        </div>
+      </div>
     </div>
   )
 }
