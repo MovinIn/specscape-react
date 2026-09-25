@@ -1,110 +1,19 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
-import type { Sensor, SpectrumBand } from '../api/types'
+import type { AggregatedSpectrum, Sensor } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import LeafletMap, { type MapMarker } from '../components/LeafletMap'
+import { EsBarPlot } from '../components/specmon/EsBarPlot'
+import { EsWaterfall } from '../components/specmon/EsWaterfall'
+import type { RowData, WaterfallData } from '../components/specmon/waterfallEngine'
 import {
-  averageSpectrumRow,
   extractSpectrumMatrix,
   formatHz,
-  matrixRange,
+  printDate,
   sensorOptions,
   type SpectrumMatrix,
 } from '../lib/spectrum'
-
-/**
- * Classic SDR waterfall colormap: dark blue -> cyan -> green -> yellow -> red.
- */
-function colormap(t: number): [number, number, number] {
-  const c = Math.min(1, Math.max(0, t))
-  if (c < 0.25) {
-    const k = c / 0.25
-    return [0, Math.round(k * 160), Math.round(60 + k * 195)]
-  }
-  if (c < 0.5) {
-    const k = (c - 0.25) / 0.25
-    return [0, Math.round(160 + k * 95), Math.round(255 - k * 255)]
-  }
-  if (c < 0.75) {
-    const k = (c - 0.5) / 0.25
-    return [Math.round(k * 255), 255, 0]
-  }
-  const k = (c - 0.75) / 0.25
-  return [255, Math.round(255 - k * 255), 0]
-}
-
-function drawWaterfall(canvas: HTMLCanvasElement, matrix: SpectrumMatrix) {
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  const rows = matrix.length
-  const cols = matrix[0]?.length ?? 0
-  if (!rows || !cols) return
-
-  canvas.width = cols
-  canvas.height = rows
-  const image = ctx.createImageData(cols, rows)
-  const { min, max } = matrixRange(matrix)
-  const span = max - min || 1
-
-  let i = 0
-  for (let y = 0; y < rows; y++) {
-    const row = matrix[y]
-    for (let x = 0; x < cols; x++) {
-      const v = row?.[x]
-      if (typeof v !== 'number' || !Number.isFinite(v)) {
-        image.data[i++] = 255
-        image.data[i++] = 255
-        image.data[i++] = 255
-        image.data[i++] = 255
-        continue
-      }
-      const [r, g, b] = colormap((v - min) / span)
-      image.data[i++] = r
-      image.data[i++] = g
-      image.data[i++] = b
-      image.data[i++] = 255
-    }
-  }
-  ctx.putImageData(image, 0, 0)
-}
-
-function drawBarPlot(
-  canvas: HTMLCanvasElement,
-  values: (number | null)[],
-  ylim: [number, number],
-) {
-  const ctx = canvas.getContext('2d')
-  if (!ctx || !values.length) return
-  const dpr = window.devicePixelRatio || 1
-  const cssW = canvas.clientWidth || 640
-  const cssH = 150
-  canvas.width = Math.floor(cssW * dpr)
-  canvas.height = Math.floor(cssH * dpr)
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-
-  const [ymin, ymax] = ylim
-  const span = ymax - ymin || 1
-
-  ctx.clearRect(0, 0, cssW, cssH)
-  const barW = cssW / values.length
-  for (let i = 0; i < values.length; i++) {
-    const v = values[i]
-    if (typeof v !== 'number' || !Number.isFinite(v)) continue
-    const t = Math.min(1, Math.max(0, (v - ymin) / span))
-    const h = t * cssH
-    const [r, g, b] = colormap(t)
-    ctx.fillStyle = `rgb(${r},${g},${b})`
-    ctx.fillRect(i * barW, cssH - h, Math.max(1, barW), h)
-  }
-}
 
 /**
  * Frequency Channel Occupancy per ITU-R SM.2256-1: percentage of samples in
@@ -159,13 +68,6 @@ function drawOccupancy(canvas: HTMLCanvasElement, percents: number[]) {
   ctx.stroke()
 }
 
-const GENERIC_BANDS: SpectrumBand[] = [
-  { label: 'HF', freqMin: 3_000_000, freqMax: 30_000_000 },
-  { label: 'VHF', freqMin: 30_000_000, freqMax: 300_000_000 },
-  { label: 'UHF', freqMin: 300_000_000, freqMax: 3_000_000_000 },
-  { label: 'SHF', freqMin: 3_000_000_000, freqMax: 11_800_000_000 },
-]
-
 const FREQ_RESOLUTIONS = [10_000, 100_000, 1_000_000, 10_000_000, 100_000_000]
 const YLIM: [number, number] = [0, 60]
 /** Fixed SNR threshold above which a channel counts as occupied (occupancy.js). */
@@ -196,8 +98,13 @@ export default function SpecMonPage() {
   const [liveMode, setLiveMode] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
 
-  const [matrix, setMatrix] = useState<SpectrumMatrix | null>(null)
-  const [bands, setBands] = useState<SpectrumBand[] | null>(null)
+  /** The last /spectrum/aggregated response, with its own start/resolution. */
+  const [spec, setSpec] = useState<(WaterfallData & { bands?: AggregatedSpectrum['bands'] }) | null>(null)
+  const matrix: SpectrumMatrix | null = spec?.values ?? null
+  const [barPlotData, setBarPlotData] = useState<RowData | null>(null)
+  /** Plot area in pixels, reported by the waterfall; drives the zoom resolution. */
+  const [maxNumVals, setMaxNumVals] = useState<[number, number]>([768, 60])
+  const [colorprops, setColorprops] = useState({ median: -5000, high: 4000 })
 
   const [showBarplot, setShowBarplot] = useState(true)
   const [showOccupancy, setShowOccupancy] = useState(true)
@@ -205,8 +112,6 @@ export default function SpecMonPage() {
   const [selSnr, setSelSnr] = useState<number | null>(null)
   const [selTime, setSelTime] = useState<Date | null>(null)
 
-  const waterfallRef = useRef<HTMLCanvasElement>(null)
-  const barRef = useRef<HTMLCanvasElement>(null)
   const occRef = useRef<HTMLCanvasElement>(null)
 
   // Load the sensor catalog once, mirroring sen-time-select's initial fetch.
@@ -241,13 +146,15 @@ export default function SpecMonPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const avgSpectrum = useMemo(
-    () => (matrix ? averageSpectrumRow(matrix) : null),
-    [matrix],
-  )
-
   const load = useCallback(
-    async (opts?: { startTime?: Date; startFreq?: number; maxFreq?: number; freqRes?: number }) => {
+    async (opts?: {
+      startTime?: Date
+      maxTime?: Date
+      startFreq?: number
+      maxFreq?: number
+      freqRes?: number
+      isUpdate?: boolean
+    }) => {
       if (!sensor.serial) {
         setStatusMessage('Select a sensor')
         return
@@ -256,8 +163,10 @@ export default function SpecMonPage() {
       const sf = opts?.startFreq ?? startFreq
       const mf = opts?.maxFreq ?? maxFreq
       const fr = opts?.freqRes ?? freqRes
-      const maxTime = new Date(st.getTime() + 3600_000)
+      const maxTime = opts?.maxTime ?? new Date(st.getTime() + 3600_000)
 
+      // legacy updateSelection clears the bar plot while fetching
+      setBarPlotData(null)
       setLoading(true)
       setIsError(false)
       setStatusMessage('')
@@ -276,14 +185,25 @@ export default function SpecMonPage() {
         const m = extractSpectrumMatrix(data)
         setRetrievalMs(Date.now() - t0)
         if (m && m.length > 1 && (m[0]?.length ?? 0) > 1) {
-          setMatrix(m)
-          const d = data as { bands?: { categories?: SpectrumBand[] } }
-          setBands(d?.bands?.categories ?? null)
+          setSpec({
+            startFreq: data.startFreq ?? sf,
+            startTime: data.startTime ?? Math.floor(st.getTime() / 1000),
+            freqRes: data.freqRes ?? fr,
+            timeRes: data.timeRes ?? timeRes,
+            noiseFloor: data.noiseFloor,
+            values: m,
+            bands: data.bands,
+          })
           setStartFreq(sf)
           setMaxFreq(mf)
-          setFreqRes(fr)
+          setFreqRes(data.freqRes ?? fr)
           setStartTime(st)
+        } else if (opts?.isUpdate && matrix) {
+          // keep the current view when a zoom/drag returns nothing
+          setSpec((prev) => (prev ? { ...prev } : prev))
+          setStatusMessage('Could not zoom: No Data')
         } else {
+          setSpec(null)
           setStatusMessage('No data')
         }
       } catch {
@@ -294,7 +214,7 @@ export default function SpecMonPage() {
         setLoading(false)
       }
     },
-    [sensor.serial, startTime, startFreq, maxFreq, freqRes, timeRes, aggFun],
+    [sensor.serial, startTime, startFreq, maxFreq, freqRes, timeRes, aggFun, matrix],
   )
 
   // Live mode: reload every 5s, tracking the last hour.
@@ -308,16 +228,6 @@ export default function SpecMonPage() {
     return () => window.clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveMode, loading])
-
-  useEffect(() => {
-    if (!matrix || !waterfallRef.current) return
-    drawWaterfall(waterfallRef.current, matrix)
-  }, [matrix])
-
-  useEffect(() => {
-    if (!avgSpectrum || !barRef.current || !showBarplot) return
-    drawBarPlot(barRef.current, avgSpectrum, YLIM)
-  }, [avgSpectrum, showBarplot])
 
   const occupancy = useMemo(
     () => (matrix ? occupancyPercents(matrix, OCCUPANCY_THRESHOLD_DB) : null),
@@ -351,19 +261,40 @@ export default function SpecMonPage() {
 
   const showZoomOut = freqRes !== 10_000_000
 
-  function onZoom(sf: number, mf: number, st?: Date) {
+  /** specmon.js onZoom: pick the finest resolution that fits the plot width. */
+  function onZoom(sf: number, mf: number, stSec?: number, mtSec?: number) {
     if (!Number.isFinite(sf) || !Number.isFinite(mf) || mf - sf <= 0) return
-    const maxV = 768
     let fr: number | null = null
     for (const cand of FREQ_RESOLUTIONS) {
-      if ((mf - sf) / cand <= maxV) {
+      if ((mf - sf) / cand <= maxNumVals[0]) {
         fr = cand
         break
       }
     }
-    if (fr == null) return
+    if (fr == null) {
+      setStatusMessage('after drag - Unable to find proper resolution')
+      return
+    }
     if (!isAllowedFreq(fr)) fr *= 10
-    void load({ startFreq: sf, maxFreq: mf, freqRes: fr, startTime: st ?? startTime })
+    void load({
+      startFreq: sf,
+      maxFreq: mf,
+      freqRes: fr,
+      startTime: stSec != null ? new Date(stSec * 1000) : startTime,
+      maxTime: mtSec != null ? new Date(mtSec * 1000) : undefined,
+      isUpdate: true,
+    })
+  }
+
+  /** specmon.js onBboxChange: the waterfall was dragged to a new window. */
+  function onBboxChange(sf: number, mf: number, stSec: number, mtSec: number) {
+    void load({
+      startFreq: sf,
+      maxFreq: mf,
+      startTime: new Date(stSec * 1000),
+      maxTime: new Date(mtSec * 1000),
+      isUpdate: true,
+    })
   }
 
   function onZoomIn() {
@@ -402,36 +333,6 @@ export default function SpecMonPage() {
     setFreqRes(10_000_000)
     void load({ startFreq: 0, maxFreq: 11_900_000_000, freqRes: 10_000_000 })
   }
-
-  function onWaterfallMove(e: ReactMouseEvent<HTMLCanvasElement>) {
-    if (!matrix) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const cols = matrix[0]?.length ?? 0
-    const rows = matrix.length
-    const x = Math.min(cols - 1, Math.max(0, Math.floor(((e.clientX - rect.left) / rect.width) * cols)))
-    const y = Math.min(rows - 1, Math.max(0, Math.floor(((e.clientY - rect.top) / rect.height) * rows)))
-    const freq = startFreq + x * freqRes
-    const time = new Date((Math.floor(startTime.getTime() / 1000) + y * timeRes) * 1000)
-    const v = matrix[y]?.[x]
-    setSelFreq(freq)
-    setSelTime(time)
-    setSelSnr(typeof v === 'number' ? v : null)
-  }
-
-  function onBarMove(e: ReactMouseEvent<HTMLCanvasElement>) {
-    if (!avgSpectrum) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const idx = Math.min(
-      avgSpectrum.length - 1,
-      Math.max(0, Math.floor(((e.clientX - rect.left) / rect.width) * avgSpectrum.length)),
-    )
-    const freq = startFreq + idx * freqRes
-    const v = avgSpectrum[idx]
-    setSelFreq(freq)
-    setSelSnr(typeof v === 'number' ? v : null)
-  }
-
-  const labelBands = bands && bands.length > 0 && bands.length < 20 ? bands : GENERIC_BANDS
 
   const markers: MapMarker[] = useMemo(() => {
     const out: MapMarker[] = []
@@ -635,60 +536,27 @@ export default function SpecMonPage() {
 
           {/* waterfall */}
           <div style={{ width: '100%', textAlign: 'center' }}>
-            <div id="es-specmap-labels">
-              {labelBands.map((band) => {
-                const active =
-                  selFreq != null &&
-                  band.freqMin != null &&
-                  band.freqMax != null &&
-                  selFreq >= band.freqMin &&
-                  selFreq <= band.freqMax
-                return (
-                  <span
-                    key={`${band.label}-${band.freqMin}`}
-                    className="freq-label"
-                    style={{
-                      backgroundColor: active ? '#5cb85c' : '#337ab7',
-                      borderColor: active ? '#4cae4c' : '#2e6da4',
-                    }}
-                    title={`Start: ${formatHz(band.freqMin)}\nEnd: ${formatHz(band.freqMax)}`}
-                    onClick={() => {
-                      if (band.freqMin != null && band.freqMax != null) {
-                        onZoom(band.freqMin, band.freqMax)
-                      }
-                    }}
-                  >
-                    {band.label}
-                  </span>
-                )
-              })}
-            </div>
-
-            {statusMessage && (
-              <p className="waterfall-msg" style={isError ? { color: '#a94442' } : undefined}>
-                {statusMessage}
-              </p>
-            )}
-
-            <div className="row">
-              <div className="col-sm-12">
-                {matrix ? (
-                  <canvas
-                    ref={waterfallRef}
-                    id="es-specmap-container-2"
-                    className="es-specmap-canvas"
-                    onMouseMove={onWaterfallMove}
-                    onMouseLeave={() => {
-                      setSelFreq(null)
-                      setSelSnr(null)
-                      setSelTime(null)
-                    }}
-                  />
-                ) : (
-                  <div className="es-specmap-canvas" style={{ minHeight: 300 }} />
-                )}
-              </div>
-            </div>
+            <EsWaterfall
+              data={spec}
+              bands={spec?.bands ?? null}
+              colorLow={colorprops.median}
+              colorHigh={colorprops.high}
+              onColorChange={(median, high) => setColorprops({ median, high })}
+              loading={loading}
+              isError={isError}
+              message={statusMessage}
+              noMoveEvent={senSelDialog}
+              selFreq={selFreq}
+              onSelect={(sel) => {
+                setSelFreq(sel?.freq ?? null)
+                setSelTime(sel?.time ?? null)
+                setSelSnr(sel?.snr ?? null)
+              }}
+              onRowData={setBarPlotData}
+              onZoom={onZoom}
+              onBboxChange={onBboxChange}
+              onMaxNumVals={setMaxNumVals}
+            />
           </div>
 
           {/* status bar */}
@@ -699,7 +567,7 @@ export default function SpecMonPage() {
             Resolution: <span className="es-sbar-val">{formatHz(freqRes)}</span>
             Time{' '}
             <span className="es-sbar-val">
-              {selTime ? selTime.toISOString().slice(0, 16).replace('T', ' ') : '—'}
+              {selTime ? printDate(selTime) : '—'}
             </span>
             Frequency <span className="es-sbar-val" style={{ width: '6em' }}>{selFreq != null ? formatHz(selFreq) : '—'}</span>
             SNR <span className="es-sbar-val" style={{ width: '4.5em' }}>{selSnr != null ? `${selSnr.toFixed(1)}dB` : '—'}</span>
@@ -743,21 +611,15 @@ export default function SpecMonPage() {
             {showBarplot ? 'Hide' : 'Show'} Spectrum
           </button>
           {showBarplot && (
-            <div className="panel">
-              {avgSpectrum ? (
-                <canvas
-                  ref={barRef}
-                  style={{ width: '100%', height: 150, display: 'block' }}
-                  onMouseMove={onBarMove}
-                  onMouseLeave={() => {
-                    setSelFreq(null)
-                    setSelSnr(null)
-                  }}
-                />
-              ) : (
-                <p className="muted">Bar plot appears after a spectrum fetch.</p>
-              )}
-            </div>
+            <EsBarPlot
+              data={barPlotData}
+              ylim={YLIM}
+              selFreq={selFreq}
+              onSelect={(freq, value) => {
+                setSelFreq(freq)
+                setSelSnr(value)
+              }}
+            />
           )}
         </div>
       </div>
@@ -813,9 +675,10 @@ export default function SpecMonPage() {
 
       {helpOpen && (
         <div className="alert alert-info" role="status" style={{ margin: '10px 0' }}>
-          Hover the waterfall or spectrum plot to inspect a value. Scroll/drag on
-          the waterfall to zoom into a frequency range. Use the arrows to shift
-          time and frequency, and Reset Plot to return to the full view.
+          Hover the waterfall to inspect a value and see that minute&apos;s
+          spectrum below. Drag the waterfall to move in frequency and time,
+          Shift+drag to zoom into a frequency range, or hold Ctrl while
+          scrolling to zoom in and out. Reset Plot returns to the full view.
         </div>
       )}
     </div>

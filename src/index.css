@@ -915,15 +915,50 @@ span.sw-default-value-header {
   cursor: pointer;
 }
 
-.es-waterfall-wrap {
-  position: relative;
+.move {
+  cursor: move !important;
 }
 
-.es-specmap-canvas {
-  background-color: #ffffff;
-  text-align: center;
-  margin-top: 15px;
+#es-color-legend-container {
+  flex: none;
+}
+
+/* Vertical two-handle color slider (stands in for the legacy rzslider). */
+.es-vslider {
+  position: relative;
+  min-width: 24px;
+}
+
+.es-vslider-track {
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: 50%;
+  width: 4px;
+  margin-left: -2px;
+  background: #d8e0f3;
+  border-radius: 2px;
+}
+
+.es-vslider-selection {
+  position: absolute;
+  left: 0;
   width: 100%;
-  height: auto;
-  image-rendering: pixelated;
+  background: #0db9f0;
+}
+
+.es-vslider-handle {
+  position: absolute;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border-radius: 50%;
+  background: #0db9f0;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.es-vslider-handle:hover {
+  background: #0aa3d4;
 }

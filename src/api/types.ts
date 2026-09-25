@@ -119,7 +119,7 @@ export interface AggregatedSpectrum {
   values?: (number | null)[][]
   interpolated?: (number | null)[][]
   noiseFloor?: number
-  bands?: { categories?: SpectrumBand[] }
+  bands?: { categories?: SpectrumBand[]; applications?: SpectrumBand[] }
 }
 
 export interface ContactPayload {

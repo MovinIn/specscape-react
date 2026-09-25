@@ -12,6 +12,24 @@ export function formatHz(hz: number | null | undefined): string {
   return `${v.toFixed(2)}${prefixes[i]}Hz`
 }
 
+/** Port of esutil.printHzUnit: `maxprefix` 6 caps the unit at MHz (axis ticks). */
+export function printHzUnit(val: number, maxprefix = 9): string {
+  const prefixes = ['', 'k', 'M', 'G']
+  const p = maxprefix / 3
+  let v = val
+  for (let i = 0; i < p; i++) {
+    if (v < 1000) return `${v.toFixed(2)}${prefixes[i]}Hz`
+    v /= 1000
+  }
+  return `${v.toFixed(2)}${prefixes[p]}Hz`
+}
+
+/** Port of esutil.printDate: `YYYY-MM-DD HH:mm` in local time. */
+export function printDate(d: Date): string {
+  const p = (n: number) => (n < 10 ? `0${n}` : String(n))
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 /** A spectrum cell is a dB value, or null where no measurement exists. */
 export type SpectrumMatrix = (number | null)[][]
 
