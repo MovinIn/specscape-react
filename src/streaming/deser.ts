@@ -1,3 +1,16 @@
+/**
+ * Serialize/deserialize sensor data-channel frames (port of streaming/deser.js).
+ *
+ * The sensor sends each frame as base64 text (delivered as a string or a
+ * Blob holding that text). Decoded bytes: [id: int8][payload...].
+ *   1       PSD: minFreq f64 LE, maxFreq f64 LE, length i32 LE, data int8[]
+ *   2,3,4,5 ADS-B / AIS aggregated / AIS raw / ACARS: UTF-8 JSON
+ *   6       LTE status: UTF-8 text
+ *   7       LTE results: UTF-8 JSON
+ *   8,9     IoT / LoRa: UTF-8 text
+ *   10      WiFi beacons: UTF-8 JSON
+ */
+
 export type PsdPayload = {
   minFreq: number
   maxFreq: number
@@ -9,50 +22,42 @@ export type DecodedMessage =
   | { id: 1; payload: PsdPayload }
   | { id: number; payload: unknown; time?: number }
 
-/**
- * Decode binary sensor data-channel frames (Angular streaming/deser.js).
- * Accepts ArrayBuffer, Blob, or base64/utf8 string payloads.
- */
-export async function decodeData(
-  raw: ArrayBuffer | Blob | string | ArrayBufferView,
-): Promise<DecodedMessage | null> {
-  let buffer: ArrayBuffer
-
-  if (raw instanceof ArrayBuffer) {
-    buffer = raw
-  } else if (ArrayBuffer.isView(raw)) {
-    buffer = raw.buffer.slice(
-      raw.byteOffset,
-      raw.byteOffset + raw.byteLength,
-    ) as ArrayBuffer
-  } else if (raw instanceof Blob) {
-    buffer = await raw.arrayBuffer()
-  } else if (typeof raw === 'string') {
-    // Try base64 first (Angular legacy path), else UTF-8 JSON control noise
-    try {
-      const bin = atob(raw)
-      const bytes = new Uint8Array(bin.length)
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-      buffer = bytes.buffer
-    } catch {
-      return null
-    }
-  } else {
+function base64ToBytes(b64: string): Uint8Array | null {
+  try {
+    const bin = atob(b64)
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    return bytes
+  } catch {
     return null
   }
+}
 
-  if (buffer.byteLength < 1) return null
-  const v = new DataView(buffer)
+async function toText(raw: string | Blob | ArrayBuffer | ArrayBufferView): Promise<string> {
+  if (typeof raw === 'string') return raw
+  if (raw instanceof Blob) return raw.text()
+  const view = raw instanceof ArrayBuffer ? new Uint8Array(raw) : new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
+  return new TextDecoder('utf8').decode(view)
+}
+
+export async function decodeData(
+  raw: string | Blob | ArrayBuffer | ArrayBufferView | null | undefined,
+): Promise<DecodedMessage | null> {
+  if (raw == null) return null
+  const text = await toText(raw)
+  if (text.length < 1) return null
+  const arr = base64ToBytes(text)
+  if (!arr || arr.length < 1) return null
+
+  const v = new DataView(arr.buffer)
   const id = v.getInt8(0)
+  const rest = () => new TextDecoder('utf8').decode(arr.slice(1, arr.length))
 
   switch (id) {
     case 1: {
-      if (buffer.byteLength < 21) return null
       const dataLength = v.getInt32(17, true)
-      const data: number[] = []
-      for (let i = 0; i < dataLength; i++) {
-        data.push(v.getInt8(21 + i))
-      }
+      const data = new Array<number>(dataLength)
+      for (let i = 0; i < dataLength; i++) data[i] = v.getInt8(21 + i)
       return {
         id: 1,
         payload: {
@@ -67,22 +72,16 @@ export async function decodeData(
     case 3:
     case 4:
     case 5:
-    case 7:
+      return { id, payload: JSON.parse(rest()) }
+    case 6:
     case 8:
-    case 9: {
-      const text = new TextDecoder('utf-8').decode(new Uint8Array(buffer, 1))
-      try {
-        return { id, payload: JSON.parse(text), time: Date.now() }
-      } catch {
-        return { id, payload: text, time: Date.now() }
-      }
-    }
-    case 6: {
-      const text = new TextDecoder('utf-8').decode(new Uint8Array(buffer, 1))
-      return { id, payload: text, time: Date.now() }
-    }
+    case 9:
+      return { id, time: Date.now(), payload: rest() }
+    case 7:
+    case 10:
+      return { id, time: Date.now(), payload: JSON.parse(rest()) }
     default:
-      return { id, payload: null }
+      return null
   }
 }
 

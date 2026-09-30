@@ -1,3 +1,5 @@
+import { encodeCmd } from './deser'
+
 type SignalingLike = {
   send: (obj: Record<string, unknown>) => void
   disconnectFromSensor: (sensorId: string | number) => void
@@ -6,48 +8,30 @@ type SignalingLike = {
 export type WebRTCHandlers = {
   onDataChannelOpen?: () => void
   onDataChannelClosed?: () => void
-  onDataChannelMessage?: (data: ArrayBuffer | Blob | string) => void
+  /** Frame as base64 text (Blob frames are resolved to their text first). */
+  onDataChannelMessage?: (data: string) => void
   onError?: (err: unknown) => void
-  onAudioStream?: (stream: MediaStream) => void
 }
 
 const ICE_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:coturn.specscape.org' },
-    {
-      urls: 'turn:coturn.specscape.org',
-      username: 'esense',
-      credential: 'esense',
-    },
+    { urls: 'turn:coturn.specscape.org', username: 'esense', credential: 'esense' },
   ],
 }
 
-/** Minimal gateway keep-alive (Angular uses binary encodeCmd; text JSON works for status). */
-function keepAlivePayload() {
-  return JSON.stringify({
-    target: 'gateway',
-    gain: 0,
-    decoder: -1,
-    decoder_settings: null,
-    fs: 0,
-    fc: 0,
-  })
-}
-
-/**
- * WebRTC peer + Janus data channel (ported from Angular streaming/webrtc.js).
- */
+/** WebRTC peer + Janus data channel (port of streaming/webrtc.js). */
 export class WebRTCConnection {
+  sensorId: string | null = null
   private signaling: SignalingLike
   private handlers: WebRTCHandlers
   private pc: RTCPeerConnection | null = null
   private dataChannel: RTCDataChannel | null = null
-  private sensorId: string | number | null = null
   private answerHasBeenSent = false
   private iceCandidates: (RTCIceCandidate | null)[] = []
   private keepAliveTimer: number | null = null
   private dataChannelTimeout: number | null = null
-  private audioEl: HTMLAudioElement | null = null
+  private audioPlayer: HTMLAudioElement | null = null
 
   constructor(signaling: SignalingLike, handlers: WebRTCHandlers = {}) {
     this.signaling = signaling
@@ -55,123 +39,99 @@ export class WebRTCConnection {
   }
 
   setAudioPlayer(el: HTMLAudioElement | null) {
-    this.audioEl = el
+    this.audioPlayer = el
   }
 
-  connectToSensor(sensorId: string | number) {
+  get isOpen() {
+    return this.dataChannel?.readyState === 'open'
+  }
+
+  connectToSensor(sensorId: string) {
     this.sensorId = sensorId
     this.answerHasBeenSent = false
     this.iceCandidates = []
     this.signaling.send({ fn: 'requestOffer', sensorId })
   }
 
-  handleConnectionOffer(msg: {
-    offer?: string
-    sensorId?: string | number
-  }) {
-    void this.createConnectionAnswer(msg)
-  }
-
-  handleIceCandidate(msg: { candidate?: RTCIceCandidateInit }) {
-    if (!this.pc || !msg.candidate?.sdpMid) return
-    void this.pc.addIceCandidate(msg.candidate)
-  }
-
-  private async createConnectionAnswer(msg: {
-    offer?: string
-    sensorId?: string | number
-  }) {
-    if (!msg.offer) {
-      this.handlers.onError?.('Missing SDP offer')
-      return
-    }
-
-    this.closePeerOnly()
+  /** Signaling `connectionOffer` → build the peer and answer it. */
+  createConnectionAnswer(msg: { offer?: string; sensorId?: string | number }) {
     this.pc = new RTCPeerConnection(ICE_CONFIG)
-    this.pc.onicecandidate = (event) => this.onIceCandidate(event)
-    this.pc.ontrack = (event) => {
-      const stream = event.streams[0]
-      if (this.audioEl) {
-        this.audioEl.srcObject = stream
-        void this.audioEl.play().catch(() => undefined)
-      }
-      this.handlers.onAudioStream?.(stream)
+    const pc = this.pc
+    pc.onicecandidate = (event) => this.onicecandidate(event)
+    pc.ontrack = (event) => {
+      if (this.audioPlayer) this.audioPlayer.srcObject = event.streams[0]
     }
 
     this.connectDataChannel()
 
-    try {
-      await this.pc.setRemoteDescription({ type: 'offer', sdp: msg.offer })
-      const answer = await this.pc.createAnswer()
-      await this.pc.setLocalDescription(answer)
-      this.signaling.send({
-        fn: 'connectionAnswer',
-        sensorId: msg.sensorId ?? this.sensorId,
-        answer: answer.sdp,
+    pc.setRemoteDescription({ type: 'offer', sdp: msg.offer })
+      .then(() => pc.createAnswer())
+      .then((answer) => {
+        void pc.setLocalDescription(answer)
+        this.signaling.send({ fn: 'connectionAnswer', sensorId: msg.sensorId, answer: answer.sdp })
+        this.answerHasBeenSent = true
+        // send the ICE candidates queued while the answer was pending
+        this.onicecandidate(null)
       })
-      this.answerHasBeenSent = true
-      this.flushIceCandidates()
-    } catch (err) {
-      this.handlers.onError?.(err)
-    }
+      .catch((err) => this.handlers.onError?.(err))
   }
 
-  private onIceCandidate(event: RTCPeerConnectionIceEvent) {
-    this.iceCandidates.push(event.candidate)
+  /** Signaling `iceCandidateForClient`. */
+  addIceCandidate(msg: { candidate?: RTCIceCandidateInit | null }) {
+    if (msg.candidate?.sdpMid && this.pc) void this.pc.addIceCandidate(msg.candidate)
+  }
+
+  private onicecandidate(event: RTCPeerConnectionIceEvent | null) {
+    if (event != null) this.iceCandidates.push(event.candidate)
     if (!this.answerHasBeenSent) return
-    this.flushIceCandidates()
-  }
-
-  private flushIceCandidates() {
     for (const candidate of this.iceCandidates) {
-      this.signaling.send({
-        fn: 'iceCandidateForSensor',
-        sensorId: this.sensorId,
-        candidate,
-      })
+      this.signaling.send({ fn: 'iceCandidateForSensor', sensorId: this.sensorId, candidate })
     }
     this.iceCandidates = []
   }
 
   private connectDataChannel() {
     if (!this.pc) return
-    if (this.dataChannelTimeout != null) {
-      window.clearTimeout(this.dataChannelTimeout)
-    }
-    this.dataChannelTimeout = window.setTimeout(() => {
-      this.handlers.onError?.('timeout waiting for data channel')
-      this.closeDataChannel()
-    }, 10_000)
-
-    this.dataChannel = this.pc.createDataChannel('JanusDataChannel', {
-      ordered: true,
-    })
-    this.dataChannel.onmessage = (message) => {
-      const data = message.data as ArrayBuffer | Blob | string
-      this.handlers.onDataChannelMessage?.(data)
-    }
-    this.dataChannel.onopen = () => {
-      if (this.dataChannelTimeout != null) {
-        window.clearTimeout(this.dataChannelTimeout)
-        this.dataChannelTimeout = null
+    this.dataChannelTimeout = window.setTimeout(
+      () => this.onDataChannelError('timeout waiting for data channel'),
+      10000,
+    )
+    // Janus expects this label.
+    const dc = this.pc.createDataChannel('JanusDataChannel', { ordered: true })
+    this.dataChannel = dc
+    dc.onmessage = (message) => {
+      const data = message.data as unknown
+      if (data instanceof Blob) {
+        void data.text().then((text) => this.handlers.onDataChannelMessage?.(text))
+      } else if (typeof data === 'string') {
+        this.handlers.onDataChannelMessage?.(data)
+      } else if (data instanceof ArrayBuffer) {
+        this.handlers.onDataChannelMessage?.(new TextDecoder('utf8').decode(data))
       }
+    }
+    dc.onopen = () => {
+      if (this.dataChannelTimeout != null) window.clearTimeout(this.dataChannelTimeout)
       if (this.keepAliveTimer != null) window.clearInterval(this.keepAliveTimer)
       this.keepAliveTimer = window.setInterval(() => {
-        this.send(keepAlivePayload())
+        this.send(encodeCmd({ target: 'gateway', gain: 0, decoder: -1, decoder_settings: null, fs: 0, fc: 0 }))
       }, 1000)
       this.handlers.onDataChannelOpen?.()
     }
-    this.dataChannel.onclose = () => {
-      if (this.keepAliveTimer != null) {
-        window.clearInterval(this.keepAliveTimer)
-        this.keepAliveTimer = null
-      }
-      this.handlers.onDataChannelClosed?.()
+    dc.onclose = () => this.onDataChannelClose()
+    dc.onerror = (err) => this.onDataChannelError(err)
+  }
+
+  private onDataChannelClose() {
+    if (this.keepAliveTimer != null) {
+      window.clearInterval(this.keepAliveTimer)
+      this.keepAliveTimer = null
     }
-    this.dataChannel.onerror = (err) => {
-      this.handlers.onError?.(err)
-      this.closeDataChannel()
-    }
+    this.handlers.onDataChannelClosed?.()
+  }
+
+  private onDataChannelError(err: unknown) {
+    this.closeDataChannel()
+    this.handlers.onError?.(err)
   }
 
   send(msg: string) {
@@ -180,40 +140,33 @@ export class WebRTCConnection {
   }
 
   closeDataChannel() {
-    if (this.sensorId != null) {
-      this.signaling.disconnectFromSensor(this.sensorId)
-    }
-    if (this.dataChannel) {
-      try {
-        this.dataChannel.close()
-      } catch {
-        /* ignore */
-      }
-      this.dataChannel = null
-    }
-    if (this.audioEl?.srcObject instanceof MediaStream) {
-      this.audioEl.srcObject.getTracks().forEach((t) => t.stop())
-      this.audioEl.srcObject = null
-    }
-    this.closePeerOnly()
-  }
-
-  private closePeerOnly() {
-    if (this.keepAliveTimer != null) {
-      window.clearInterval(this.keepAliveTimer)
-      this.keepAliveTimer = null
-    }
     if (this.dataChannelTimeout != null) {
       window.clearTimeout(this.dataChannelTimeout)
       this.dataChannelTimeout = null
     }
-    if (this.pc) {
-      this.pc.close()
-      this.pc = null
+    if (this.sensorId != null) this.signaling.disconnectFromSensor(this.sensorId)
+    if (this.dataChannel) {
+      this.send(
+        encodeCmd({
+          target: 'es_sensor',
+          gain: 0,
+          decoder: -1,
+          decoder_settings: null,
+          fn: 'connectionClose',
+          fs: 0,
+          fc: 0,
+        }),
+      )
+      const dc = this.dataChannel
+      dc.onclose = null
+      dc.close()
+      this.dataChannel = null
+      // the legacy code fires onclose manually
+      this.onDataChannelClose()
     }
-  }
-
-  dispose() {
-    this.closeDataChannel()
+    const src = this.audioPlayer?.srcObject
+    if (src instanceof MediaStream) src.getTracks().forEach((t) => t.stop())
+    this.pc?.close()
+    this.pc = null
   }
 }

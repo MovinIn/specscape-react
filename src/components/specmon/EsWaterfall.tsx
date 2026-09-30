@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { SpectrumBand } from '../../api/types'
+import { RzSlider } from '../RzSlider'
 import { formatHz } from '../../lib/spectrum'
 import {
   WATERFALL_HEIGHT,
@@ -183,10 +184,14 @@ export function EsWaterfall(props: Props) {
         <div className="col-sm-1" id="es-waterfall-slider-container">
           <div style={{ height: 15 }}>&nbsp;</div>
           <div style={{ display: 'flex', flexDirection: 'row', height: WATERFALL_HEIGHT }}>
-            <VerticalRangeSlider
-              low={colorLow}
+            <RzSlider
+              vertical
+              value={colorLow}
               high={colorHigh}
-              onChange={props.onColorChange}
+              floor={SLIDER_FLOOR}
+              ceil={SLIDER_CEIL}
+              onChange={(lo, hi) => props.onColorChange(lo, hi ?? colorHigh)}
+              style={{ flex: '1 1 auto' }}
             />
             <canvas ref={legendRef} id="es-color-legend-container" width={80} height={WATERFALL_HEIGHT} />
           </div>
@@ -211,65 +216,6 @@ export function EsWaterfall(props: Props) {
             style={{ backgroundColor: '#ffffff', display: 'none' }}
           />
         </div>
-      </div>
-    </div>
-  )
-}
-
-/** Two-handle vertical slider standing in for the legacy vertical rzslider. */
-function VerticalRangeSlider({
-  low,
-  high,
-  onChange,
-}: {
-  low: number
-  high: number
-  onChange: (low: number, high: number) => void
-}) {
-  const trackRef = useRef<HTMLDivElement>(null)
-  const span = SLIDER_CEIL - SLIDER_FLOOR
-  const toPct = (v: number) => ((SLIDER_CEIL - v) / span) * 100
-
-  function valueAt(clientY: number): number {
-    const rect = trackRef.current!.getBoundingClientRect()
-    const t = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height))
-    return Math.round(SLIDER_CEIL - t * span)
-  }
-
-  function handlers(which: 'low' | 'high') {
-    return {
-      onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => {
-        e.currentTarget.setPointerCapture(e.pointerId)
-        e.preventDefault()
-      },
-      onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => {
-        if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-        const v = valueAt(e.clientY)
-        if (which === 'low') onChange(Math.min(v, high), high)
-        else onChange(low, Math.max(v, low))
-      },
-    }
-  }
-
-  return (
-    <div className="es-vslider" style={{ flex: '1 1 auto' }}>
-      <div className="es-vslider-track" ref={trackRef}>
-        <div
-          className="es-vslider-selection"
-          style={{ top: `${toPct(high)}%`, height: `${toPct(low) - toPct(high)}%` }}
-        />
-        <div
-          className="es-vslider-handle"
-          style={{ top: `${toPct(high)}%` }}
-          title={`${high / 100} dB`}
-          {...handlers('high')}
-        />
-        <div
-          className="es-vslider-handle"
-          style={{ top: `${toPct(low)}%` }}
-          title={`${low / 100} dB`}
-          {...handlers('low')}
-        />
       </div>
     </div>
   )

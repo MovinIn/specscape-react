@@ -22,10 +22,18 @@ type AuthContextValue = {
   jwt: string | null
   login: (username: string, password: string) => Promise<boolean>
   logout: () => Promise<void>
+  /** Re-fetch the principal to obtain a fresh JWT (legacy esAuth.refresh). */
+  refreshJwt: () => Promise<string | null>
   loading: boolean
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
+
+/** The API returns the signaling JWT as `Authorization: Bearer <token>` on /user/principal. */
+function tokenFrom(res: Response): string | null {
+  const header = res.headers.get('Authorization')
+  return header?.startsWith('Bearer ') ? header.slice(7) : null
+}
 
 function toBasicAuth(username: string, password: string) {
   const bytes = new TextEncoder().encode(`${username}:${password}`)
@@ -52,6 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return
         }
         const principal = (await res.json()) as Principal
+        const token = tokenFrom(res)
+        if (token && !cancelled) {
+          localStorage.setItem('authentication_token', token)
+          setJwt(token)
+        }
         if (!cancelled) {
           setUser(
             principal?.username
@@ -106,9 +119,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false
     }
 
-    const authHeader = res.headers.get('Authorization')
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.slice(7)
+    const token = tokenFrom(res)
+    if (token) {
       localStorage.setItem('authentication_token', token)
       setJwt(token)
     }
@@ -128,6 +140,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  const refreshJwt = useCallback(async () => {
+    try {
+      const res = await api.getPrincipal()
+      const token = res.ok ? tokenFrom(res) : null
+      if (token) {
+        localStorage.setItem('authentication_token', token)
+        setJwt(token)
+      }
+      return token
+    } catch {
+      return null
+    }
+  }, [])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -136,9 +162,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       jwt,
       login,
       logout,
+      refreshJwt,
       loading,
     }),
-    [user, jwt, login, logout, loading],
+    [user, jwt, login, logout, refreshJwt, loading],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

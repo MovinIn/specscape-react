@@ -16,8 +16,8 @@ type SignalingHandlers = {
   onSensorStatus?: (msg: { sensorId?: string | number; status?: string }) => void
   onCoinsReport?: (coins: number) => void
   onAuthenticationFailed?: () => void
-  onConnectionOffer?: (msg: unknown) => void
-  onIceCandidateForClient?: (msg: unknown) => void
+  onConnectionOffer?: (msg: { offer?: string; sensorId?: string | number }) => void
+  onIceCandidateForClient?: (msg: { candidate?: RTCIceCandidateInit | null }) => void
   onConnectionClose?: (sensorId: unknown) => void
   onConnectionDeclined?: (msg: unknown) => void
 }
@@ -41,23 +41,31 @@ export class Signaling {
 
   async connect(wssUri: string) {
     this.close()
+    let ws: WebSocket
     try {
-      this.ws = new WebSocket(wssUri)
+      ws = new WebSocket(wssUri)
     } catch (err) {
       this.handlers.onDisconnected?.()
       throw err
     }
-    this.ws.addEventListener('open', () => {
+    this.ws = ws
+    // events from a socket we already replaced (e.g. after Retry) are ignored
+    ws.addEventListener('open', () => {
+      if (this.ws !== ws) return
       this.authenticate(this.token)
       this.handlers.onConnected?.()
       this.timerId = window.setInterval(() => {
-        this.ws?.send('')
+        if (ws.readyState === WebSocket.OPEN) ws.send('')
       }, 20_000)
     })
-    this.ws.addEventListener('message', (event) => this.onmessage(event))
-    this.ws.addEventListener('close', () => {
+    ws.addEventListener('message', (event) => {
+      if (this.ws === ws) this.onmessage(event)
+    })
+    ws.addEventListener('close', () => {
+      if (this.ws !== ws) return
       if (this.timerId != null) window.clearInterval(this.timerId)
       this.timerId = null
+      this.ws = null
       this.handlers.onDisconnected?.()
     })
   }
@@ -77,10 +85,10 @@ export class Signaling {
         this.handlers.onSensors?.(this.sensors)
         break
       case 'connectionOffer':
-        this.handlers.onConnectionOffer?.(msg)
+        this.handlers.onConnectionOffer?.(msg as { offer?: string; sensorId?: string | number })
         break
       case 'iceCandidateForClient':
-        this.handlers.onIceCandidateForClient?.(msg)
+        this.handlers.onIceCandidateForClient?.(msg as { candidate?: RTCIceCandidateInit | null })
         break
       case 'sensorStatus':
         this.handlers.onSensorStatus?.(
@@ -109,7 +117,7 @@ export class Signaling {
   }
 
   send(obj: Record<string, unknown>) {
-    this.ws?.send(JSON.stringify(obj))
+    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(obj))
   }
 
   authenticate(token: string) {
