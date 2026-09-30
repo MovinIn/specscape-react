@@ -69,12 +69,12 @@ function AppRoutes() {
 
           <Route path="login" element={<AuthPage />} />
           <Route path="logout" element={<AuthPage />} />
-          <Route path="account/register" element={<RegisterPage />} />
+          <Route path="account/register" element={<RegisterPage key="register" />} />
           <Route
             path="account/edit"
             element={
               <RequireAuth>
-                <RegisterPage />
+                <RegisterPage key="edit" />
               </RequireAuth>
             }
           />

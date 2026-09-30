@@ -4,46 +4,41 @@ import { api } from '../api/client'
 import { Recaptcha, resetRecaptcha } from '../components/Recaptcha'
 import { useNotify } from '../components/Notifier'
 
-type UserForm = {
-  fullName: string
-  uid: string
-  mail: string
-  confirmMail: string
-  userPassword: string
-  confirmPassword: string
-  organization: string
-  postalAddress: string
-  city: string
-  country: string
-  telephoneNumber: string
-}
+type UserField =
+  | 'fullName'
+  | 'uid'
+  | 'mail'
+  | 'confirmMail'
+  | 'userPassword'
+  | 'confirmPassword'
+  | 'organization'
+  | 'postalAddress'
+  | 'city'
+  | 'country'
+  | 'telephoneNumber'
+  | 'editModePassword'
 
-const emptyUser: UserForm = {
-  fullName: '',
-  uid: '',
-  mail: '',
-  confirmMail: '',
-  userPassword: '',
-  confirmPassword: '',
-  organization: '',
-  postalAddress: '',
-  city: '',
-  country: '',
-  telephoneNumber: '',
+/**
+ * Like $scope.user: starts empty (register) or is the /user/profile response
+ * as-is (edit), so updateProfile sends back exactly what the server gave.
+ */
+type UserState = Partial<Record<UserField, string | null>> & Record<string, unknown>
+
+/** Server messages come back as a JSON array of strings, e.g. ["Profile changed"]. */
+function messages(data: unknown): string[] {
+  return Array.isArray(data) ? data.map(String) : []
 }
 
 /** Exact port of register.html / register.js (EsRegisterController). */
 export default function RegisterPage() {
-  const editMatch = useMatch('/account/edit')
+  const editMode = Boolean(useMatch('/account/edit'))
   const notifier = useNotify()
 
-  const [editMode, setEditMode] = useState(false)
   const [passwordTabActive, setPasswordTabActive] = useState(false)
   const [beforeEditMail, setBeforeEditMail] = useState('')
   const [tos, setTos] = useState(false)
-  const [editModePassword, setEditModePassword] = useState('')
 
-  const [user, setUser] = useState<UserForm>(emptyUser)
+  const [user, setUser] = useState<UserState>({})
   const [pw, setPw] = useState({
     currentPassword: '',
     newPassword: '',
@@ -55,17 +50,13 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    const isEdit = Boolean(editMatch)
-    setEditMode(isEdit)
-    if (!isEdit) return
+    if (!editMode) return
     let cancelled = false
     ;(async () => {
       try {
-        const account = (await api.getAccount()) as Partial<UserForm> & {
-          mail?: string
-        }
-        if (cancelled) return
-        setUser((u) => ({ ...u, ...account, confirmMail: account.mail ?? '' }))
+        const account = (await api.getAccount()) as UserState | undefined
+        if (cancelled || !account) return
+        setUser(account)
         setBeforeEditMail(account.mail ?? '')
       } catch (err) {
         console.error(err)
@@ -74,32 +65,48 @@ export default function RegisterPage() {
     return () => {
       cancelled = true
     }
-  }, [editMatch])
+  }, [editMode])
 
-  function update<K extends keyof UserForm>(key: K, value: UserForm[K]) {
+  function update(key: UserField, value: string) {
     setUser((u) => ({ ...u, [key]: value }))
+  }
+
+  /** ng-model display value: missing/null fields render empty. */
+  function field(key: UserField): string {
+    return user[key] ?? ''
   }
 
   async function passwordChangeSubmit(e: FormEvent) {
     e.preventDefault()
     if (pw.newPassword !== pw.newPasswordConfirmed) {
+      // legacy notifier.error(msg) replaces whatever was shown before
+      notifier.reset()
       notifier.show("The new passwords don't match!", 'error')
       return
     }
     setLoading(true)
     try {
-      const resp = (await api.updatePassword(pw)) as unknown as
-        | { data?: string[] }
-        | undefined
+      const msgs = messages(await api.updatePassword(pw))
       notifier.reset()
-      if (resp?.data?.length) {
-        resp.data.forEach((msg) => notifier.show(msg, 'info'))
+      if (msgs.length) {
+        msgs.forEach((msg) => notifier.show(msg, 'info'))
       } else {
         notifier.show('Password updated', 'info')
       }
     } catch (err) {
       notifier.reset()
-      notifier.onPromiseRejected(err)
+      // legacy: notifier.error(err.data) -> one entry holding the server message(s)
+      const data = (err as { data?: unknown } | null)?.data
+      if (data) {
+        const text = Array.isArray(data)
+          ? data.map(String).join(', ')
+          : typeof data === 'object' && 'message' in data
+            ? String((data as { message?: unknown }).message)
+            : String(data)
+        notifier.show(text, 'error')
+      } else {
+        notifier.show('Error, please try again later!', 'error')
+      }
     } finally {
       setLoading(false)
     }
@@ -118,29 +125,26 @@ export default function RegisterPage() {
 
       setLoading(true)
       try {
-        const resp = (await api.updateAccount({
-          currentPassword: editModePassword,
-          newDetails: user,
-        })) as unknown as { status?: number; data?: string[] }
+        const msgs = messages(
+          await api.updateAccount({
+            currentPassword: user.editModePassword ?? '',
+            newDetails: user,
+          }),
+        )
         notifier.reset()
-        if (resp?.status === 200) {
-          if (resp.data?.length) {
-            resp.data.forEach((msg) => notifier.show(msg, 'info'))
-          } else {
-            notifier.show('Your account was updated!', 'info')
-          }
-        } else if (resp?.data?.length) {
-          resp.data.forEach((msg) => notifier.show(msg, 'error'))
+        if (msgs.length) {
+          msgs.forEach((msg) => notifier.show(msg, 'info'))
         } else {
-          notifier.show(
-            'There was a problem updating your account! Please try again later.',
-            'error',
-          )
+          notifier.show('Your account was updated!', 'info')
         }
-      } catch {
+      } catch (err) {
         notifier.reset()
+        // legacy notifier.error(msg) clears the previous entry, so only the last message stays
+        const msgs = messages((err as { data?: unknown } | null)?.data)
         notifier.show(
-          'There was a problem updating your account! Please try again later.',
+          msgs.length
+            ? msgs[msgs.length - 1]
+            : 'There was a problem updating your account! Please try again later.',
           'error',
         )
       } finally {
@@ -207,14 +211,14 @@ export default function RegisterPage() {
                   className={!passwordTabActive ? 'active' : ''}
                   onClick={() => setPasswordTabActive(false)}
                 >
-                  <a href="#">Update Profile Data</a>
+                  <a href="#" onClick={(e) => e.preventDefault()}>Update Profile Data</a>
                 </li>
                 <li
                   role="presentation"
                   className={passwordTabActive ? 'active' : ''}
                   onClick={() => setPasswordTabActive(true)}
                 >
-                  <a href="#">Change Password</a>
+                  <a href="#" onClick={(e) => e.preventDefault()}>Change Password</a>
                 </li>
               </ul>
             </div>
@@ -241,7 +245,7 @@ export default function RegisterPage() {
                       placeholder="full name"
                       className="form-control input-md"
                       required
-                      value={user.fullName}
+                      value={field('fullName')}
                       onChange={(e) => update('fullName', e.target.value)}
                     />
                   </div>
@@ -259,8 +263,7 @@ export default function RegisterPage() {
                       placeholder="username"
                       className="form-control input-md"
                       required
-                      disabled={editMode}
-                      value={user.uid}
+                      value={field('uid')}
                       onChange={(e) => update('uid', e.target.value)}
                     />
                   </div>
@@ -278,7 +281,7 @@ export default function RegisterPage() {
                       placeholder="email"
                       className="form-control input-md"
                       required
-                      value={user.mail}
+                      value={field('mail')}
                       onChange={(e) => update('mail', e.target.value)}
                     />
                   </div>
@@ -297,7 +300,7 @@ export default function RegisterPage() {
                         placeholder="email"
                         className="form-control input-md"
                         required
-                        value={user.confirmMail}
+                        value={field('confirmMail')}
                         onChange={(e) => update('confirmMail', e.target.value)}
                       />
                     </div>
@@ -333,7 +336,7 @@ export default function RegisterPage() {
                           placeholder="password"
                           className="form-control input-md"
                           required
-                          value={user.userPassword}
+                          value={field('userPassword')}
                           onChange={(e) => update('userPassword', e.target.value)}
                         />
                       </div>
@@ -353,7 +356,7 @@ export default function RegisterPage() {
                           placeholder="password"
                           className="form-control input-md"
                           required
-                          value={user.confirmPassword}
+                          value={field('confirmPassword')}
                           onChange={(e) => update('confirmPassword', e.target.value)}
                         />
                       </div>
@@ -377,7 +380,7 @@ export default function RegisterPage() {
                       type="text"
                       placeholder="organization"
                       className="form-control input-md"
-                      value={user.organization}
+                      value={field('organization')}
                       onChange={(e) => update('organization', e.target.value)}
                     />
                   </div>
@@ -394,7 +397,7 @@ export default function RegisterPage() {
                       type="text"
                       placeholder="address"
                       className="form-control input-md"
-                      value={user.postalAddress}
+                      value={field('postalAddress')}
                       onChange={(e) => update('postalAddress', e.target.value)}
                     />
                   </div>
@@ -411,7 +414,7 @@ export default function RegisterPage() {
                       type="text"
                       placeholder="city"
                       className="form-control input-md"
-                      value={user.city}
+                      value={field('city')}
                       onChange={(e) => update('city', e.target.value)}
                     />
                   </div>
@@ -428,7 +431,7 @@ export default function RegisterPage() {
                       type="text"
                       placeholder="country"
                       className="form-control input-md"
-                      value={user.country}
+                      value={field('country')}
                       onChange={(e) => update('country', e.target.value)}
                     />
                   </div>
@@ -445,7 +448,7 @@ export default function RegisterPage() {
                       type="text"
                       placeholder="+44 (000) 1111"
                       className="form-control input-md"
-                      value={user.telephoneNumber}
+                      value={field('telephoneNumber')}
                       onChange={(e) => update('telephoneNumber', e.target.value)}
                     />
                   </div>
@@ -509,8 +512,8 @@ export default function RegisterPage() {
                         placeholder="password"
                         className="form-control input-md"
                         required
-                        value={editModePassword}
-                        onChange={(e) => setEditModePassword(e.target.value)}
+                        value={field('editModePassword')}
+                        onChange={(e) => update('editModePassword', e.target.value)}
                       />
                     </div>
                   </div>
