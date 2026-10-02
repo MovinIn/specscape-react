@@ -86,12 +86,17 @@ export default function LandingPage() {
         </div>
       </section>
       <section className="network-section" aria-labelledby="network-heading">
-        <div className="section-heading"><div><h2 id="network-heading">Add to a connected spectrum network.</h2></div><Link to="/sensors">View sensors <i className="fa-solid fa-arrow-right" aria-hidden="true" /></Link></div>
+        <div className="section-heading"><div><h2 id="network-heading">Add to a connected spectrum network.</h2></div></div>
         <div className="network-panel">
           <div className="network-statistics" aria-live="polite">
-            <div><span className="stat-label"><span className="status-dot" /> Online sensors</span><strong>{online}</strong></div>
-            <div><span className="stat-label">Registered sensors</span><strong>{registered}</strong></div>
-            <div><span className="stat-label">Registered users</span><strong>{users}</strong></div>
+            <div><strong>{online}</strong><span className="stat-label">Online sensors <span className="status-dot status-dot-trailing" aria-hidden="true" /></span></div>
+            <div><strong>{registered}</strong><span className="stat-label">Registered sensors</span></div>
+            <div><strong>{users}</strong><span className="stat-label">Registered users</span></div>
+            <Link to="/sensors" className="network-sensors-link">
+              <span className="tool-icon"><i className="fa-regular fa-eye" aria-hidden="true" /></span>
+              <span>View sensors</span>
+              <i className="fa-solid fa-arrow-right resource-arrow" aria-hidden="true" />
+            </Link>
           </div>
           <LeafletMap markers={markers} height={330} center={[35, 10]} zoom={2} fitToMarkers />
         </div>
