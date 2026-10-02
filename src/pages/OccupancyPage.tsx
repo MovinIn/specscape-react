@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { Sensor } from '../api/types'
@@ -227,8 +228,8 @@ export default function OccupancyPage() {
   }
 
   return (
-    <div className="container-fluid">
-      <h1>Frequency Channel Occupancy</h1>
+    <div className="container-fluid research-workbench">
+      <PageHeader title="Channel Occupancy" lead="Measure frequency channel utilization over time and compare occupancy trends." />
 
       <div className="row">
         <div style={{ position: 'relative' }} className="col-sm-12">

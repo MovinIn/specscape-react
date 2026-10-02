@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { CookieBanner } from '../components/CookieBanner'
 import { DocumentTitle } from '../components/DocumentTitle'
 import { MockBanner } from '../components/MockBanner'
@@ -7,13 +7,14 @@ import { Footer } from './Footer'
 import { Navbar } from './Navbar'
 
 export function Layout() {
+  const { pathname } = useLocation()
   return (
     <div className="app-shell">
       <ScrollToTop />
       <DocumentTitle />
-      <Navbar />
+      <Navbar key={pathname} />
       <MockBanner />
-      <main className="site-main" style={{ marginBottom: 70 }}>
+      <main className="site-main" id="main-content" tabIndex={-1}>
         <Outlet />
       </main>
       <Footer />

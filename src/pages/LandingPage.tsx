@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
+import { researchTools } from '../config/navigation'
 import type { Sensor } from '../api/types'
 import LeafletMap, { type MapMarker } from '../components/LeafletMap'
 
@@ -10,12 +11,15 @@ export default function LandingPage() {
   const [allSensors, setAllSensors] = useState<Sensor[]>([])
   const [numUsers, setNumUsers] = useState<number | null>(null)
 
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+
   useEffect(() => {
     let cancelled = false
     api
       .getStats()
       .then((data) => {
         if (cancelled) return
+        setStatus('ready')
         setAllSensors(Array.isArray(data?.sensors) ? data.sensors : [])
         setNumUsers(
           typeof data?.num_users === 'number' ? data.num_users : null,
@@ -23,6 +27,7 @@ export default function LandingPage() {
       })
       .catch(() => {
         if (cancelled) return
+        setStatus('error')
         setAllSensors([])
         setNumUsers(null)
       })
@@ -36,8 +41,8 @@ export default function LandingPage() {
     [allSensors],
   )
 
-  const registered = allSensors.length || '—'
-  const online = allSensors.length ? sensingSensors.length : '—'
+  const registered = status === 'ready' ? allSensors.length : '—'
+  const online = status === 'ready' ? sensingSensors.length : '—'
   const users = numUsers ?? '—'
 
   const markers = useMemo(() => {
@@ -61,297 +66,57 @@ export default function LandingPage() {
   }, [sensingSensors])
 
   return (
-    <>
-      <div className="jumbotron row-shadow" id="mainjumbo">
-        <div className="jumbotron-full jumbotron-bg" />
-        <div
-          className="jumbotron-full"
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <div>
-            <h1>Collaborative Spectrum Monitoring</h1>
-          </div>
+    <div className="home-backdrop">
+      <header className="home-hero">
+        <div className="overview-heading">
+        <div><h1>Collaborative Spectrum Monitoring</h1></div>
+        <Link to="/api-spec" className="btn btn-default"><i className="fa-solid fa-code" aria-hidden="true" /> Explore the API <span aria-hidden="true">↗</span></Link>
         </div>
-      </div>
-
-      <div id="frontpage">
-        <div className="container container-row-padding-top container-row-padding-bottom">
-          <div className="row">
-            <div className="col-sm-12">
-              <div className="page-header">
-                <h2>What Is SpecScape?</h2>
-              </div>
-              <div className="col-sm-7 text-justify">
-                <p>
-                  The SpecScape network is a crowd-sourcing initiative to
-                  collect and analyse spectrum data. It uses small radio
-                  sensors based on cheap commodity hardware and offers
-                  aggregated spectrum information over an open API.
-                </p>
-                <p>
-                  The initiative&apos;s goal is to sense the entire spectrum
-                  in populated regions of the world and to make the data
-                  available in real-time for different kinds of stakeholders
-                  who require a deeper knowledge of the actual spectrum
-                  usage.
-                </p>
-                <p>
-                  SpecScape is an open initiative in which everyone can
-                  contribute with spectrum measurements and access the
-                  collected data. If you want to take part of this
-                  initiative, get involved now by setting up a sensor at
-                  your place or <Link to="/contact">contact us</Link> to see
-                  how our data can help your business.
-                </p>
-              </div>
-              <div className="col-sm-5 text-center center-block">
-                <img
-                  src="/images/measure_original-300x246.jpg"
-                  alt="city scale spectrum measurements"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="row">
-            <div
-              className="col-sm-12 text-center"
-              style={{
-                marginTop: 30,
-                borderTop: '1px solid #e3e3e3',
-                borderBottom: '1px solid #e3e3e3',
-                padding: 19,
-              }}
-            >
-              <Link className="btn btn-lg btn-default" to="/work-with-us">
-                Work with Us!
-              </Link>{' '}
-              <Link className="btn btn-lg btn-primary" to="/join?apply">
-                Apply for a Sensor!
-              </Link>
-            </div>
-          </div>
+      </header>
+    <div className="research-home">
+      <section aria-labelledby="tools-heading">
+        <div className="section-heading"><div><h2 id="tools-heading">Research tools</h2></div></div>
+        <div className="research-tools-grid">
+          {researchTools.map((tool, index) => <Link to={tool.to} key={tool.to} className="research-tool-card">
+            <div className="tool-card-top"><span className="tool-icon"><i className={`fa-solid fa-${tool.icon}`} aria-hidden="true" /></span><span className="tool-category">{tool.label}</span></div>
+            <h3>{tool.title}</h3><p>{tool.description}</p>
+            <div className="tool-card-bottom"><span>Open {index === 0 ? 'monitor' : index === 1 ? 'decoder' : index === 2 ? 'dashboard' : index === 3 ? 'datasets' : 'ranking'}</span><i className="fa-solid fa-arrow-right" aria-hidden="true" /></div>
+          </Link>)}
+          <div className="contribute-card"><span className="tool-icon"><i className="fa-solid fa-tower-broadcast" aria-hidden="true" /></span><h3>Better research starts<br />with broader coverage.</h3><p>Host a sensor and contribute measurements to an open research network.</p><Link to="/join">Contribute to the network <i className="fa-solid fa-arrow-right" aria-hidden="true" /></Link></div>
         </div>
-
-        <div className="container-fluid">
-          <div className="row row-shadow-top row-color-spectrum">
-            <div className="col-xs-12">
-              <div className="container">
-                <div className="row">
-                  <div className="col-sm-12 container-row-padding-top">
-                    <div className="row">
-                      <div className="text-justify col-sm-12">
-                        <div
-                          className="page-header"
-                          style={{ borderBottom: '1px solid #b3b3b3' }}
-                        >
-                          <h2>Live Spectrum Monitoring</h2>
-                        </div>
-                        <p>
-                          SpecScape enables you to monitor the spectrum of
-                          any sensor in the world with an interactive and
-                          live web application:
-                        </p>
-
-                        <div className="spectrum-labels">
-                          <div>
-                            <span
-                              className="label label-primary"
-                              title="Set multiple parameters such as the center frequency while getting live spectrum monitoring results!"
-                            >
-                              Interactive Spectrum Monitor
-                            </span>
-                          </div>
-                          <div>
-                            <span
-                              className="label label-primary"
-                              title="Access the historical data base and analyze data from the past!"
-                            >
-                              Historical Data
-                            </span>
-                          </div>
-                          <div>
-                            <span
-                              className="label label-primary"
-                              title="Access the historical data base and analyze data from the past!"
-                            >
-                              Spectrum Decoding
-                            </span>
-                          </div>
-                        </div>
-
-                        <div style={{ textAlign: 'center', marginTop: '1em' }}>
-                          <img src="/images/schema-network.png" alt="schema" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    className="col-sm-12 text-center"
-                    style={{
-                      marginTop: 30,
-                      borderTop: '1px solid #b3b3b3',
-                      padding: 19,
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
+      </section>
+      <section className="network-section" aria-labelledby="network-heading">
+        <div className="section-heading"><div><h2 id="network-heading">Add to a connected spectrum network.</h2></div><Link to="/sensors">View sensors <i className="fa-solid fa-arrow-right" aria-hidden="true" /></Link></div>
+        <div className="network-panel">
+          <div className="network-statistics" aria-live="polite">
+            <div><span className="stat-label"><span className="status-dot" /> Online sensors</span><strong>{online}</strong></div>
+            <div><span className="stat-label">Registered sensors</span><strong>{registered}</strong></div>
+            <div><span className="stat-label">Registered users</span><strong>{users}</strong></div>
           </div>
-
-          <div className="row row-shadow-bottom row-color-spectrum">
-            &nbsp;
-          </div>
+          <LeafletMap markers={markers} height={330} center={[35, 10]} zoom={2} fitToMarkers />
         </div>
-
-        <div className="container-fluid">
-          <div className="row row-shadow-top-dark row-color">
-            <div className="col-xs-12">
-              <div className="container">
-                <div className="row">
-                  <div className="col-xs-12">
-                    <div className="page-header">
-                      <h2>Our Goal: Worldwide Coverage</h2>
-                    </div>
-                    <div className="col-sm-8 text-justify">
-                      <p>
-                        SpecScape already has active sensors all over the
-                        world. You can help us to increase coverage and
-                        density for better measurements!
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="row row-background">
-            <LeafletMap markers={markers} height={420} />
-          </div>
-
-          <div className="row row-color">
-            <div className="col-xs-12">
-              <div className="container">
-                <div className="row" style={{ marginTop: 20 }}>
-                  <div className="col-sm-4 counter">
-                    <p className="counter-count">{registered}</p>
-                    <p className="counter-label">Registered Sensors</p>
-                  </div>
-                  <div className="col-sm-4 counter">
-                    <p className="counter-count">{online}</p>
-                    <p className="counter-label">Online Sensors</p>
-                  </div>
-                  <div className="col-sm-4 counter">
-                    <p className="counter-count">{users}</p>
-                    <p className="counter-label">Registered Users</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="row row-shadow-bottom-dark row-color">
-            &nbsp;
-          </div>
+      </section>
+      <section className="resource-section" aria-labelledby="resources-heading">
+        <div className="section-heading"><h2 id="resources-heading">Build on shared knowledge.</h2></div>
+        <div className="connected-resource-card">
+          <Link to="/api-spec">
+            <span className="tool-icon"><i className="fa-solid fa-code" aria-hidden="true" /></span>
+            <span>API documentation</span>
+            <i className="fa-solid fa-arrow-right resource-arrow" aria-hidden="true" />
+          </Link>
+          <Link to="/publications">
+            <span className="tool-icon"><i className="fa-regular fa-file-lines" aria-hidden="true" /></span>
+            <span>Publications</span>
+            <i className="fa-solid fa-arrow-right resource-arrow" aria-hidden="true" />
+          </Link>
+          <Link to="/open-source">
+            <span className="tool-icon"><i className="fa-brands fa-github" aria-hidden="true" /></span>
+            <span>Open source</span>
+            <i className="fa-solid fa-arrow-right resource-arrow" aria-hidden="true" />
+          </Link>
         </div>
-
-        <div className="container container-row-padding-top container-row-padding-bottom">
-          <div className="row">
-            <div className="col-sm-12">
-              <div className="page-header">
-                <h2>Features</h2>
-              </div>
-            </div>
-            <div className="col-sm-6 text-justify center-block">
-              <div className="thumbnail" style={{ minHeight: 360 }}>
-                <img
-                  src="/images/specmon-thumb.png"
-                  alt="Monitor"
-                  width={300}
-                  height={219}
-                />
-                <div className="caption">
-                  <h3>Interactive Web App</h3>
-                  <p>
-                    Live and historical spectrum data is accessible through
-                    an interactive spectrum monitoring web application.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="col-sm-6 text-justify center-block">
-              <div className="thumbnail" style={{ minHeight: 360 }}>
-                <img
-                  src="/images/blue-lego-block-md.png"
-                  alt="API"
-                  width={208}
-                  height={219}
-                />
-                <div className="caption">
-                  <h3>API</h3>
-                  <p>
-                    Access real-time spectrum data measurements through an
-                    open API. See the{' '}
-                    <Link to="/api-spec">specification</Link> fore more
-                    details.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="row">
-            <div className="col-sm-6 text-justify center-block">
-              <div className="thumbnail" style={{ minHeight: 360 }}>
-                <img
-                  src="/images/github-lg.png"
-                  alt="Github"
-                  width={225}
-                  height={219}
-                />
-                <div className="caption">
-                  <h3>Open Source</h3>
-                  <p>
-                    We publish open source software and hardware. For more
-                    information on our code and hardware, see the{' '}
-                    <Link to="/open-source" target="_blank">
-                      Open Source page
-                    </Link>
-                    .
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="container-fluid row-shadow row-color-orange">
-          <div className="container container-row-padding-top container-row-padding-bottom">
-            <div className="row">
-              <div className="col-sm-12">
-                <div
-                  className="page-header"
-                  style={{ borderBottom: '1px solid #b3b3b3' }}
-                >
-                  <h2>Who Is Behind The Project?</h2>
-                </div>
-                <p>
-                  SpecScape is powered by Electrosense and operated by
-                  University of Wisconsin-Madison. ElectroSense is a
-                  non-profit organization based in Switzerland which aims at
-                  improving the way how the radio frequency spectrum is
-                  used.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
+      </section>
+    </div>
+    </div>
   )
 }

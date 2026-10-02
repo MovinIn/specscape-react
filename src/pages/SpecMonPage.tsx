@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
@@ -352,7 +353,8 @@ export default function SpecMonPage() {
   }, [allSensors])
 
   return (
-    <div className="container-fluid">
+    <div className="container-fluid research-workbench">
+      <PageHeader title="Spectrum Monitor" lead="Select a sensor to explore live and historical spectrum measurements." />
       <div className="row">
         <div className="col-sm-12">
           {/* controls: sensor/date/time + zoom/aggregation/live-mode bars */}

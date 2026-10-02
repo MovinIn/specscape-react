@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { api } from '../api/client'
 import type { Sensor } from '../api/types'
@@ -408,8 +409,8 @@ export default function SpectrumDecoderPage() {
 
   return (
     <>
-      <div className="container-fluid">
-        <h1>Spectrum Decoder</h1>
+      <div className="container-fluid research-workbench">
+        <PageHeader title="Spectrum Decoder" lead="Connect to a sensor to stream and decode radio signals." />
 
         <div id="sensor-status" className="panel panel-default">
           <div className="panel-heading">

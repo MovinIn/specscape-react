@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import type { Sensor } from '../api/types'
@@ -116,7 +117,7 @@ export default function IqDatasetsPage() {
     <div className="container">
       <div className="row">
         <div className="col-sm-12">
-          <h1>IQ Data Sets</h1>
+          <PageHeader title="I/Q Datasets" lead="Access signal recordings for reproducible experiments and offline analysis." />
 
           <p>
             Here you can find all accessible I/Q measurements for your

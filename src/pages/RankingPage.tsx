@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import type { RankingEntry } from '../api/types'
@@ -82,7 +83,7 @@ export default function RankingPage() {
     <div className="container">
       <div className="row">
         <div className="col-sm-12">
-          <h1>Ranking</h1>
+          <PageHeader title="Sensor Ranking" lead="Compare sensor availability and contributions across the network." />
 
           <div className="row">
             <div className="col-sm-4 col-sm-offset-8">
