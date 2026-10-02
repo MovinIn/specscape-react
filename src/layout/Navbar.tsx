@@ -47,7 +47,7 @@ export function Navbar() {
   return <header className="workspace-header" ref={ref}>
     <a href="#main-content" className="skip-link">Skip to content</a>
     <div className="header-inner">
-      <Link to="/" className="brand" aria-label="SpecScape home"><span className="brand-mark"><i className="fa-solid fa-wave-square" aria-hidden="true" /></span><span>Spec<span className="brand-accent">Scape</span></span></Link>
+      <Link to="/" className="brand" aria-label="SpecScape home"><img className="brand-mark" src="/images/specscape-globe-logo-cropped.png" alt="" width={44} height={44} /><span>Spec<span className="brand-accent">Scape</span></span></Link>
       <button className="mobile-nav-toggle" aria-label="Toggle navigation" aria-expanded={mobile} aria-controls="workspace-navigation" onClick={() => setMobile(!mobile)}><i className="fa-solid fa-bars" aria-hidden="true" /></button>
       <div className={`header-actions${mobile ? ' mobile-open' : ''}`}>
         {dropdown('resources', 'Resources', resources)}

@@ -13,7 +13,7 @@ button,input,select,textarea { font:inherit; }
 .header-inner { height:76px; display:flex; align-items:center; gap:24px; }
 .brand { display:flex; align-items:center; gap:10px; font-size:25px; font-weight:650; letter-spacing:-1px; color:var(--ink); }
 .brand:hover { text-decoration:none; }.brand-accent { color:var(--blue); }
-.brand-mark { display:grid; place-items:center; width:34px; height:34px; border:1px solid #d4e6f5; color:var(--blue); border-radius:9px; background:#edf5fc; font-size:20px; }
+.brand-mark { display: block; width: 32px; height: 32px; flex-shrink: 0; object-fit: contain; }
 .brand-caption { font-size:9px; letter-spacing:1.5px; color:var(--muted); border-left:1px solid var(--line); padding-left:24px; }
 .header-actions { margin-left:auto; display:flex; gap:22px; align-items:center; }
 .nav-menu { position:relative; }.nav-menu-toggle { border:0; background:transparent; padding:10px 0; color:#526373; cursor:pointer; }.nav-menu-toggle i { font-size:9px; margin-left:8px; }
