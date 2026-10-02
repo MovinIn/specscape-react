@@ -216,3 +216,44 @@ button,input,select,textarea { font:inherit; }
 }
 
 .status-dot-trailing { margin-left: 6px; margin-right: 0; }
+
+.about-specscape-section { margin-top: 38px; }
+.about-specscape-text {
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.8;
+}
+.about-specscape-text p { max-width: 90ch; margin: 0 0 18px; }
+.about-specscape-text p:last-child { margin-bottom: 0; }
+.about-specscape-text a { text-decoration: underline; }
+
+.about-specscape-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: center;
+  gap: 40px;
+}
+.about-specscape-image {
+  display: block;
+  width: 300px;
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+@media (max-width: 767px) {
+  .about-specscape-content { grid-template-columns: 1fr; gap: 24px; }
+}
+
+@media (max-width: 767px) {
+  .header-inner { height: auto; min-height: 64px; flex-wrap: wrap; padding: 14px 20px; }
+  .header-actions.mobile-open {
+    position: static;
+    width: 100%;
+    margin-left: 0;
+    padding: 15px 0 0;
+    border-bottom: 0;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+  .tool-nav.mobile-open { padding-top: 0; }
+}

@@ -101,8 +101,43 @@ export default function LandingPage() {
           <LeafletMap markers={markers} height={330} center={[35, 10]} zoom={2} fitToMarkers />
         </div>
       </section>
+      <section className="about-specscape-section" aria-labelledby="about-specscape-heading">
+        <div className="section-heading"><h2 id="about-specscape-heading">What is SpecScape?</h2></div>
+        <div className="about-specscape-content">
+        <div className="about-specscape-text">
+          <p>
+            The SpecScape network is a crowd-sourcing initiative to collect and
+            analyse spectrum data. It uses small radio sensors based on cheap
+            commodity hardware and offers aggregated spectrum information over
+            an open API.
+          </p>
+          <p>
+            The initiative&apos;s goal is to sense the entire spectrum in populated
+            regions of the world and to make the data available in real-time for
+            different kinds of stakeholders who require a deeper knowledge of
+            the actual spectrum usage.
+          </p>
+          <p>
+            SpecScape is an open initiative in which everyone can contribute
+            with spectrum measurements and access the collected data. If you
+            want to take part of this initiative, get involved now by setting
+            up a sensor at your place or{' '}
+            <a href="https://specscape.org/contact">contact us</a> to see how our
+            data can help your business.
+          </p>
+        </div>
+        <img
+          className="about-specscape-image"
+          src="/images/measure_original-300x246.jpg"
+          alt="Radio spectrum measurements across a city"
+          width={300}
+          height={246}
+          loading="lazy"
+        />
+        </div>
+      </section>
       <section className="resource-section" aria-labelledby="resources-heading">
-        <div className="section-heading"><h2 id="resources-heading">Build on shared knowledge.</h2></div>
+        <div className="section-heading"><h2 id="resources-heading">Explore further with...</h2></div>
         <div className="connected-resource-card">
           <Link to="/api-spec">
             <span className="tool-icon"><i className="fa-solid fa-code" aria-hidden="true" /></span>

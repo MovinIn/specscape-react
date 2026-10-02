@@ -4,10 +4,18 @@ import { useAuth } from '../auth/AuthContext'
 import { researchTools } from '../config/navigation'
 
 const resources = [
-  ['/api-spec', 'API documentation'], ['/datasets', 'Public datasets'],
-  ['/publications', 'Publications'], ['/hardware', 'Compatible hardware'],
-  ['/open-source', 'Open source'], ['/partners', 'Partners'],
-  ['/work-with-us', 'Work with us'], ['/faq', 'Help & FAQ'], ['/contact', 'Contact'],
+  ['/api-spec', 'API documentation'],
+  ['/datasets', 'Public datasets'],
+  ['/open-source', 'Open source'],
+  ['/publications', 'Publications'],
+  ['/hardware', 'Compatible hardware'],
+]
+const aboutLinks = [
+  ['/faq', 'Help & FAQ'],
+  ['/contact', 'Contact'],
+  ['/partners', 'Partners'],
+  ['/terms-of-service', 'Terms of service'],
+  ['/privacy-policy', 'Privacy policy'],
 ]
 const adminLinks = [
   ['/campaign-management', 'Campaign management'],
@@ -43,6 +51,7 @@ export function Navbar() {
       <button className="mobile-nav-toggle" aria-label="Toggle navigation" aria-expanded={mobile} aria-controls="workspace-navigation" onClick={() => setMobile(!mobile)}><i className="fa-solid fa-bars" aria-hidden="true" /></button>
       <div className={`header-actions${mobile ? ' mobile-open' : ''}`}>
         {dropdown('resources', 'Resources', resources)}
+        {dropdown('about', 'About', aboutLinks)}
         {isAdmin && dropdown('admin', 'Administration', adminLinks)}
         {dropdown('personal', authenticated ? user?.username ?? 'My account' : 'Personal', [
           ['/sensors', 'My sensors'], ['/contribute', 'My contributions'], ['/join', 'Host a sensor'], ['/sensor-setup', 'Sensor setup'], ['/sensor-token', 'Registration token'],
