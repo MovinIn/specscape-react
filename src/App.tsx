@@ -37,6 +37,7 @@ const StreamingStatusPage = lazy(() => import('./pages/StreamingStatusPage'))
 const CampaignPage = lazy(() => import('./pages/CampaignPage'))
 const SponsoringListPage = lazy(() => import('./pages/SponsoringListPage'))
 const SponsoringStatsPage = lazy(() => import('./pages/SponsoringStatsPage'))
+const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage'))
 const SponsoringApplicationPage = lazy(
   () => import('./pages/SponsoringApplicationPage'),
 )
@@ -180,6 +181,14 @@ function AppRoutes() {
             element={
               <RequireAdmin>
                 <SponsoringStatsPage />
+              </RequireAdmin>
+            }
+          />
+          <Route
+            path="admin/users"
+            element={
+              <RequireAdmin>
+                <AdminUsersPage />
               </RequireAdmin>
             }
           />

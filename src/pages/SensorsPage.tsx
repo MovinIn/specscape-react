@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { ControllerInfo, Sensor, SensorStatusEntry } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import LeafletMap, { type MapMarker } from '../components/LeafletMap'
+import { EsLeafletMap, type MapSensor } from '../components/EsLeafletMap'
 
 function coordsOf(s: Sensor): { lat: number; lon: number } | null {
   const lat = Number(s.position?.latitude ?? s.latitude ?? s.lat)
@@ -149,17 +149,15 @@ export default function SensorsPage() {
     [filtered, user],
   )
 
-  const markers: MapMarker[] = useMemo(() => {
-    const out: MapMarker[] = []
+  const mapSensors: MapSensor[] = useMemo(() => {
+    const out: MapSensor[] = []
     for (const s of sensors) {
       const c = coordsOf(s)
       if (!c || s.serial === undefined) continue
+      // EsLeafletMap reads position.latitude/longitude
       out.push({
-        id: String(s.serial),
-        lat: c.lat,
-        lon: c.lon,
-        label: s.name ?? String(s.serial),
-        online: Boolean(s.sensing),
+        ...s,
+        position: { ...(s.position ?? {}), latitude: c.lat, longitude: c.lon },
       })
     }
     return out
@@ -176,11 +174,14 @@ export default function SensorsPage() {
           className="col-xs-4 col-md-5 sensors-map-col"
           style={{ position: 'fixed', height: '100%' }}
         >
-          <LeafletMap
-            markers={markers}
+          <EsLeafletMap
+            sensors={mapSensors}
+            scrolling
             height="100%"
-            fitToMarkers
-            selectedId={selected?.serial !== undefined ? String(selected.serial) : undefined}
+            onSelect={(serial) => {
+              const found = sensors.find((s) => String(s.serial) === serial)
+              setSelected(found ?? null)
+            }}
           />
         </div>
 
@@ -259,6 +260,14 @@ export default function SensorsPage() {
                                 title="Show Spectrum"
                               >
                                 <span className="glyphicon glyphicon-signal" />
+                              </Link>{' '}
+                              <Link
+                                to={`/spectrum-decoder?sensor=${s.serial}`}
+                                className="btn btn-xs"
+                                style={{ backgroundColor: '#7b3fb5', color: '#fff' }}
+                                title="Open Spectrum Decoder"
+                              >
+                                <span className="glyphicon glyphicon-headphones" />
                               </Link>
                             </td>
                           </tr>
@@ -297,13 +306,23 @@ export default function SensorsPage() {
                           <td onClick={() => setSelected(s)}>
                             <LastStatusCell sensor={s} />
                           </td>
-                          <td>
+                          <td className="text-right" style={{ whiteSpace: 'nowrap' }}>
                             <Link
                               to={`/specmon?sensor=${s.serial}`}
                               className="btn btn-primary btn-xs"
+                              title="Show Spectrum"
                             >
                               <span className="glyphicon glyphicon-signal" />
                               &nbsp;Spectrum
+                            </Link>{' '}
+                            <Link
+                              to={`/spectrum-decoder?sensor=${s.serial}`}
+                              className="btn btn-xs"
+                              style={{ backgroundColor: '#7b3fb5', color: '#fff' }}
+                              title="Open Spectrum Decoder"
+                            >
+                              <span className="glyphicon glyphicon-headphones" />
+                              &nbsp;Decoder
                             </Link>
                           </td>
                         </tr>
@@ -363,6 +382,14 @@ export default function SensorsPage() {
                             title="Show Spectrum"
                           >
                             <span className="glyphicon glyphicon-signal" />
+                          </Link>{' '}
+                          <Link
+                            to={`/spectrum-decoder?sensor=${s.serial}`}
+                            className="btn btn-xs"
+                            style={{ backgroundColor: '#7b3fb5', color: '#fff' }}
+                            title="Open Spectrum Decoder"
+                          >
+                            <span className="glyphicon glyphicon-headphones" />
                           </Link>
                         </td>
                       </tr>

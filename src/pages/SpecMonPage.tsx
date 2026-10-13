@@ -114,6 +114,9 @@ export default function SpecMonPage() {
 
   const occRef = useRef<HTMLCanvasElement>(null)
 
+  // Track whether we've already done the initial auto-load so we don't repeat it.
+  const autoLoadedRef = useRef(false)
+
   // Load the sensor catalog once, mirroring sen-time-select's initial fetch.
   useEffect(() => {
     let cancelled = false
@@ -244,6 +247,14 @@ export default function SpecMonPage() {
       sensor.serial ? { sensor: sensor.serial } : {},
       { replace: true },
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sensor.serial])
+
+  // Auto-load the plot once the sensor serial is first resolved (e.g. from the URL ?sensor= param).
+  useEffect(() => {
+    if (!sensor.serial || autoLoadedRef.current) return
+    autoLoadedRef.current = true
+    void load({ startFreq: 0, maxFreq: 11_900_000_000, freqRes: 10_000_000 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sensor.serial])
 

@@ -22,6 +22,8 @@ type Props = {
   onSelect?: (serial: string) => void
   /** Changing this re-measures the map (legacy `refresh` binding). */
   refresh?: unknown
+  /** CSS height for the map container. Defaults to 420px. */
+  height?: string | number
 }
 
 function markerImage(s: MapSensor, rtc: boolean) {
@@ -38,7 +40,7 @@ const icon = (url: string) => L.icon({ iconUrl: url, iconSize: [21, 34] })
  * clustered markers, no popups (the page passes no `infowindow`), and a
  * click selects the sensor, zooms in and turns its marker yellow.
  */
-export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect, refresh }: Props) {
+export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect, refresh, height = 420 }: Props) {
   const divRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null)
@@ -147,5 +149,6 @@ export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect,
     return () => window.clearTimeout(t)
   }, [refresh])
 
-  return <div ref={divRef} style={{ width: '100%', height: 420, position: 'relative', zIndex: 1 }} />
+  const cssHeight = typeof height === 'number' ? `${height}px` : height
+  return <div ref={divRef} style={{ width: '100%', height: cssHeight, position: 'relative', zIndex: 1 }} />
 }

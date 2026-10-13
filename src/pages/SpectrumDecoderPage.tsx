@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Sensor } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
@@ -81,6 +82,9 @@ export default function SpectrumDecoderPage() {
   const { jwt, refreshJwt } = useAuth()
   const jwtRef = useRef(jwt)
   const refreshRef = useRef(refreshJwt)
+  const [searchParams] = useSearchParams()
+  // Sensor serial passed via ?sensor= URL param; used to auto-connect on load.
+  const autoConnectSerial = useRef<string | null>(searchParams.get('sensor'))
   useEffect(() => {
     jwtRef.current = jwt
     refreshRef.current = refreshJwt
@@ -94,6 +98,8 @@ export default function SpectrumDecoderPage() {
   const powerRef = useRef<LivePowerLevelsHandle>(null)
   const adsbMapRef = useRef<FlightmapHandle>(null)
   const aisMapRef = useRef<FlightmapHandle>(null)
+  // Stable ref so closures created at mount (e.g. onConnected) can call connectToSensor.
+  const connectToSensorRef = useRef<(id: string | number) => void>(() => {})
 
   const [signalingStatus, setSignalingStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
   const [webrtcStatus, setWebrtcStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
@@ -256,7 +262,19 @@ export default function SpectrumDecoderPage() {
           if (msg.sensorId == null) return
           setSensorStates((prev) => ({ ...prev, [String(msg.sensorId)]: String(msg.status) }))
         },
-        onConnected: () => setSignalingStatus('connected'),
+        onConnected: () => {
+          setSignalingStatus('connected')
+          // Auto-connect to the sensor passed in the URL param, if present.
+          const serial = autoConnectSerial.current
+          if (serial) {
+            autoConnectSerial.current = null
+            // Small delay so sensorStates has time to populate from the initial
+            // 'sensors' message that arrives right after the 'connected' event.
+            window.setTimeout(() => {
+              connectToSensorRef.current(serial)
+            }, 800)
+          }
+        },
         onDisconnected: () => {
           setSignalingStatus('disconnected')
           setSensorStates({})
@@ -358,6 +376,8 @@ export default function SpectrumDecoderPage() {
       setPanCenter([si.position.latitude, si.position.longitude])
     }
   }
+  // Keep the ref pointing at the latest version of connectToSensor.
+  connectToSensorRef.current = connectToSensor
 
   function connectToSensorName(name: string) {
     const serials = joinedSensorInfo.filter((i) => i.name === name).map((i) => i.serial)
@@ -520,6 +540,7 @@ export default function SpectrumDecoderPage() {
             upperThreshold={thresholds.upper}
             lowerThreshold={thresholds.lower}
             sliderWidth={sliderWidth}
+            showSlider
           />
 
           <LiveWaterfall

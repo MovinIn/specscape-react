@@ -237,6 +237,12 @@ export function Navbar() {
                         &nbsp;Signaling Status
                       </Link>
                     </li>
+                    <li className={pathname === '/admin/users' ? 'active' : ''}>
+                      <Link to="/admin/users" onClick={close}>
+                        <span className="glyphicon glyphicon-list" />
+                        &nbsp;Users
+                      </Link>
+                    </li>
                   </>
                 )}
                 {!loading && authenticated && (

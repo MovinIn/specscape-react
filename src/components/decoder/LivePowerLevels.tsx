@@ -1,4 +1,5 @@
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
+import { RzSlider } from '../RzSlider'
 
 export type LivePowerLevelsHandle = {
   setData: (data: number[]) => void
@@ -12,6 +13,8 @@ type Props = {
   lowerThreshold: number
   /** Width of the waterfall slider column, so the plot lines up with the waterfall. */
   sliderWidth: number
+  /** When true, renders a vertical range slider on the left to control the Y axis. */
+  showSlider?: boolean
 }
 
 const HEIGHT = 250
@@ -22,13 +25,17 @@ const FONT = '"Lucida Grande", "Lucida Sans Unicode", Arial, Helvetica, sans-ser
  * (black line, #040534 fill, "Power Level [dB/Hz]" y axis, hidden x axis),
  * drawn on a canvas with Highcharts' default spacing and styling.
  */
-export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWidth }: Props) {
+export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWidth, showSlider = false }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const legendCanvasRef = useRef<HTMLCanvasElement>(null)
   const dataRef = useRef<number[]>([])
   const lastDataTime = useRef(0)
   const [noData, setNoData] = useState(true)
   const range = useRef({ min: -50, max: 0 })
+  // Slider-controlled Y axis range (dB). Low handle = min (floor), high handle = max (ceil).
+  const [sliderLow, setSliderLow] = useState(-50)
+  const [sliderHigh, setSliderHigh] = useState(0)
 
   function draw() {
     const canvas = canvasRef.current
@@ -125,11 +132,57 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
     },
   }))
 
+  // When slider is visible, slider values control the range; otherwise use waterfall thresholds.
   useEffect(() => {
-    range.current = { max: upperThreshold * -50, min: lowerThreshold * -50 }
-    draw()
+    if (!showSlider) {
+      range.current = { max: upperThreshold * -50, min: lowerThreshold * -50 }
+      draw()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [upperThreshold, lowerThreshold])
+  }, [upperThreshold, lowerThreshold, showSlider])
+
+  useEffect(() => {
+    if (showSlider) {
+      range.current = { min: sliderLow, max: sliderHigh }
+      draw()
+      drawPowerLegend()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sliderLow, sliderHigh, showSlider])
+
+  function drawPowerLegend() {
+    const canvas = legendCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const { min, max } = range.current
+    const legendH = canvas.height
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, canvas.width, legendH)
+    ctx.font = '10px monospace'
+    ctx.fillStyle = '#999999'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    ctx.fillText(`${max} dB`, 2, 2)
+    ctx.textBaseline = 'bottom'
+    ctx.fillText(`${min} dB`, 2, legendH - 2)
+    // draw tick marks at every 10 dB
+    const span = max - min || 1
+    ctx.strokeStyle = '#cccccc'
+    ctx.lineWidth = 1
+    for (let v = Math.ceil(min / 10) * 10; v <= max; v += 10) {
+      const yy = legendH - ((v - min) / span) * legendH
+      ctx.beginPath()
+      ctx.moveTo(0, yy)
+      ctx.lineTo(canvas.width, yy)
+      ctx.stroke()
+      if (v !== min && v !== max) {
+        ctx.fillStyle = '#666666'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(`${v}`, 2, yy)
+      }
+    }
+  }
 
   useEffect(() => {
     const t = window.setInterval(() => setNoData(Date.now() - lastDataTime.current > 100), 250)
@@ -147,7 +200,35 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
 
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'row', alignItems: 'stretch' }}>
-      <div style={{ flexBasis: spacer, minWidth: spacer, flexGrow: 0 }}>&nbsp;</div>
+      {showSlider ? (
+        // Vertical range slider + dB legend, mirroring the waterfall slider layout
+        <div
+          id="es-power-slider-container"
+          style={{ display: 'flex', flexDirection: 'row', height: HEIGHT, flexShrink: 0 }}
+        >
+          <RzSlider
+            vertical
+            value={sliderLow}
+            high={sliderHigh}
+            floor={-100}
+            ceil={0}
+            onChange={(lo, hi) => {
+              setSliderLow(lo)
+              if (hi !== undefined) setSliderHigh(hi)
+            }}
+            style={{ flex: '1 1 auto', width: 40 }}
+          />
+          <canvas
+            ref={legendCanvasRef}
+            id="es-power-legend-canvas"
+            width={60}
+            height={HEIGHT}
+            style={{ display: 'block' }}
+          />
+        </div>
+      ) : (
+        <div style={{ flexBasis: spacer, minWidth: spacer, flexGrow: 0 }}>&nbsp;</div>
+      )}
       <div style={{ flex: '1 0 auto', width: 100 }}>
         <div style={{ width: '100%', minHeight: HEIGHT, position: 'relative' }}>
           <div ref={wrapRef} id="power-level-chart" style={{ width: '100%' }}>

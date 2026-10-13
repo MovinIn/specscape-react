@@ -125,7 +125,7 @@ body {
 /* Accordion header toggle (mirrors angular-ui-bootstrap's uib-accordion-heading
    rendered as a .panel-title link) — reset button chrome, keep panel-heading
    text styling and full-width click target. */
-.panel-heading .accordion-toggle {
+.panel-heading button.accordion-toggle {
   display: block;
   width: 100%;
   padding: 0;
@@ -138,13 +138,13 @@ body {
   cursor: pointer;
 }
 
-.panel-heading .accordion-toggle:hover,
-.panel-heading .accordion-toggle:focus {
+.panel-heading button.accordion-toggle:hover,
+.panel-heading button.accordion-toggle:focus {
   color: #333333;
   text-decoration: none;
 }
 
-.panel-heading .accordion-toggle .glyphicon {
+.panel-heading button.accordion-toggle .glyphicon {
   color: #999999;
 }
 
@@ -415,7 +415,9 @@ body {
   text-decoration: none;
 }
 
-.panel {
+/* Card style for a bare `.panel` only; real Bootstrap panels (`panel panel-default`
+   etc.) keep Bootstrap's own styling, as in the legacy app. */
+.panel:not([class*='panel-']) {
   background: #ffffff;
   border: 1px solid #dddddd;
   border-radius: 0;
@@ -1158,4 +1160,78 @@ span.sw-default-value-header {
     height: 72px;
     opacity: 0;
   }
+}
+
+/* —— angular-ui-bootstrap 1.3.3 datepicker / popup / position CSS (verbatim) —— */
+
+.uib-datepicker .uib-title {
+  width: 100%;
+}
+
+.uib-day button, .uib-month button, .uib-year button {
+  min-width: 100%;
+}
+
+.uib-left, .uib-right {
+  width: 100%
+}
+
+.uib-datepicker-popup.dropdown-menu {
+  display: block;
+  float: none;
+  margin: 0;
+}
+
+.uib-button-bar {
+  padding: 10px 9px 2px;
+}
+
+.uib-position-measure {
+  display: block !important;
+  visibility: hidden !important;
+  position: absolute !important;
+  top: -9999px !important;
+  left: -9999px !important;
+}
+
+/* —— Campaign Management (campaign-management.css, verbatim) —— */
+
+.campaign-list {
+    display: flex;
+    flex-direction: column;
+}
+
+@media(min-width: 700px) {
+    .campaign-list {
+        flex-direction: row;
+    }
+}
+@media(min-width: 1000px) {
+    .hacking-br {
+        display: none;
+    }
+}
+
+.campaign-list-id {
+    width: 75px;
+}
+
+.campaign-list-type {
+    width: 95px;
+}
+
+.campaign-list-state {
+    width: 145px;
+}
+
+.campaign-list-start {
+    width: 245px;
+}
+
+.campaign-list-end {
+    width: 245px;
+}
+
+.campaign-list-sensors {
+    width: 100px;
 }

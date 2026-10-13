@@ -129,3 +129,59 @@ export interface ContactPayload {
   message: string
   'g-recaptcha-response'?: string
 }
+
+/** One entry of GET /user/list (admin only). Shape confirmed from a real capture. */
+export interface AdminUser {
+  uid: string
+  username: string
+  surname: string
+  fullName: string
+  mail: string
+  organization: string
+  postalAddress: string | null
+  telephoneNumber: string | null
+  postalCode: null
+  city: string | null
+  country: string | null
+  enabled: boolean
+  authorities: unknown[]
+  /**
+   * NOT populated by /user/list: it is false for every user in the capture,
+   * including known admins. Do not use it to show or decide roles.
+   */
+  admin: boolean
+  accountNonExpired: boolean
+  accountNonLocked: boolean
+  credentialsNonExpired: boolean
+}
+
+// Signaling stats (admin). Shapes confirmed from a capture (2026-10-02), except
+// the `rtc` entries: no session was active, so they come from what the legacy
+// streaming-status.html reads.
+
+/** GET /signaling/status */
+export interface SignalingStatus {
+  /** Sensor serials as strings; a sensor without an id appears as "None". */
+  connectedSensors?: string[]
+  connectedClients?: string[]
+  /** Active WebRTC sessions; `start` is in epoch seconds. */
+  rtc?: { clientUid: string; sensorId: string | number; start: number }[]
+}
+
+/** GET /signaling/time/user — `duration` in seconds. */
+export interface SignalingUserTime {
+  uid: string
+  duration: number
+}
+
+/** GET /signaling/time/sensor — `duration` in seconds. */
+export interface SignalingSensorTime {
+  sensorId: number
+  duration: number
+}
+
+/** GET /signaling/time/hours */
+export interface SignalingUsageHour {
+  hour: number
+  startedSessions: number
+}

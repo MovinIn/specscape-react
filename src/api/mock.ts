@@ -1,4 +1,4 @@
-import type { NetworkStats, Sensor, SensorStatusEntry } from './types'
+import type { AdminUser, NetworkStats, Sensor, SensorStatusEntry } from './types'
 
 const now = Math.floor(Date.now() / 1000)
 
@@ -113,6 +113,42 @@ export function isHtmlPayload(text: string) {
   return t.startsWith('<!doctype') || t.startsWith('<html')
 }
 
+/** Fake /user/list entries in the exact shape of the real response. */
+export const MOCK_USERS: AdminUser[] = [
+  {
+    uid: 'demo', username: 'demo', surname: 'User', fullName: 'Demo User',
+    mail: 'demo@specscape.local', organization: 'SpecScape',
+    postalAddress: null, telephoneNumber: null, postalCode: null,
+    city: 'Zurich', country: 'Switzerland',
+    enabled: true, authorities: [], admin: false,
+    accountNonExpired: true, accountNonLocked: true, credentialsNonExpired: true,
+  },
+  {
+    uid: 'alice', username: 'alice', surname: 'Example', fullName: 'Alice Example',
+    mail: 'alice@example.com', organization: 'Example University',
+    postalAddress: '1 Example Street', telephoneNumber: '000', postalCode: null,
+    city: 'Leuven', country: 'Belgium',
+    enabled: true, authorities: [], admin: false,
+    accountNonExpired: true, accountNonLocked: true, credentialsNonExpired: true,
+  },
+  {
+    uid: 'bob', username: 'bob', surname: 'Sample', fullName: 'Bob Sample',
+    mail: 'bob@example.org', organization: 'None',
+    postalAddress: null, telephoneNumber: null, postalCode: null,
+    city: null, country: null,
+    enabled: false, authorities: [], admin: false,
+    accountNonExpired: true, accountNonLocked: true, credentialsNonExpired: true,
+  },
+  {
+    uid: 'carol', username: 'carol', surname: 'Test', fullName: 'Carol Test',
+    mail: 'carol@example.net', organization: 'Radio Club',
+    postalAddress: null, telephoneNumber: null, postalCode: null,
+    city: 'Madrid', country: 'Spain',
+    enabled: false, authorities: [], admin: false,
+    accountNonExpired: true, accountNonLocked: true, credentialsNonExpired: true,
+  },
+]
+
 export function mockGet(path: string): unknown | undefined {
   warnMockOnce()
   const bare = path.split('?')[0]
@@ -168,12 +204,26 @@ export function mockGet(path: string): unknown | undefined {
   }
   if (bare === '/signaling/status') {
     return {
-      mock: true,
-      sessions: 3,
-      sensorsOnline: 2,
-      peakClients: 12,
-      wssHealthy: false,
+      connectedSensors: ['11259375', '11259376', 'None'],
+      connectedClients: ['demo', 'alice', 'alice'],
+      rtc: [{ clientUid: 'alice', sensorId: 11259375, start: now - 754 }],
     }
+  }
+  if (bare === '/signaling/time/user') {
+    return [
+      { uid: 'alice', duration: 15342 },
+      { uid: 'demo', duration: 5400 },
+      { uid: 'bob', duration: 610 },
+    ]
+  }
+  if (bare === '/signaling/time/sensor') {
+    return [
+      { sensorId: 11259375, duration: 16100 },
+      { sensorId: 11259376, duration: 5252 },
+    ]
+  }
+  if (bare === '/signaling/time/hours') {
+    return [8, 9, 10, 14, 15, 20].map((hour, i) => ({ hour, startedSessions: i + 2 }))
   }
   if (bare === '/sensorDonation/list' || bare === '/sensorDonation/list/all') {
     return [
@@ -183,6 +233,10 @@ export function mockGet(path: string): unknown | undefined {
         email: 'ada@example.com',
         organization: 'Analytical Engines',
         status: 'PENDING',
+        sensorType: 'ElectroSense Kit (RasPi + Dongle + Board)',
+        created: now - 3 * 86400,
+        deleted: null,
+        shipped: null,
       },
       {
         id: 2,
@@ -190,6 +244,10 @@ export function mockGet(path: string): unknown | undefined {
         email: 'nikola@example.com',
         organization: 'Wardenclyffe',
         status: 'APPROVED',
+        sensorType: 'Extension Board only',
+        created: now - 40 * 86400,
+        deleted: null,
+        shipped: now - 86400,
       },
     ]
   }
@@ -205,15 +263,22 @@ export function mockGet(path: string): unknown | undefined {
     }
   }
   if (bare === '/sensorDonation/stats/monthly/') {
-    return [
-      { month: '2026-01', count: 4, total: 1200 },
-      { month: '2026-02', count: 6, total: 2100 },
-      { month: '2026-03', count: 3, total: 900 },
-      { month: '2026-04', count: 8, total: 3200 },
-      { month: '2026-05', count: 5, total: 1800 },
-    ]
+    // real shape is {"monthly": {...}} (captured empty); the YYYY-MM key format is inferred
+    return {
+      monthly: {
+        '2026-08': {
+          'ElectroSense Kit (RasPi + Dongle + Board)': { created: 3, deleted: 1, shipped: 1 },
+          'Extension Board only': { created: 1, deleted: 0, shipped: 1 },
+        },
+        '2026-09': {
+          'ElectroSense Kit (RasPi + Dongle + Board)': { created: 2, deleted: 0, shipped: 0 },
+          'ElectroSense Kit (RasPi + Dongle)': { created: 1, deleted: 0, shipped: 0 },
+        },
+      },
+    }
   }
   if (bare === '/sensorPrice/list') return []
+  if (bare === '/user/list') return MOCK_USERS
   if (bare === '/user/profile') {
     return { uid: 'demo', mail: 'demo@specscape.local', fullName: 'Demo User' }
   }

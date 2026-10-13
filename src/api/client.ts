@@ -1,4 +1,5 @@
 import type {
+  AdminUser,
   AggregatedSpectrum,
   ContactPayload,
   NetworkStats,
@@ -6,6 +7,10 @@ import type {
   RankingEntry,
   Sensor,
   SensorStatusEntry,
+  SignalingSensorTime,
+  SignalingStatus,
+  SignalingUsageHour,
+  SignalingUserTime,
 } from './types'
 import { isHtmlPayload, mockGet } from './mock'
 
@@ -318,7 +323,19 @@ export const api = {
   },
 
   getSignalingStatus() {
-    return request('/signaling/status')
+    return request<SignalingStatus>('/signaling/status')
+  },
+
+  getSignalingUserTimes() {
+    return request<SignalingUserTime[]>('/signaling/time/user')
+  },
+
+  getSignalingSensorTimes() {
+    return request<SignalingSensorTime[]>('/signaling/time/sensor')
+  },
+
+  getSignalingUsageTimes() {
+    return request<SignalingUsageHour[]>('/signaling/time/hours')
   },
 
   getSignalingWssUri() {
@@ -350,6 +367,11 @@ export const api = {
 
   getSensorPrices() {
     return request('/sensorPrice/list')
+  },
+
+  /** GET /user/list — all users (admin only). Read-only. */
+  listUsers() {
+    return request<AdminUser[]>('/user/list')
   },
 
   getAccount() {
