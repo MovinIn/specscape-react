@@ -13,6 +13,8 @@ type Props = {
   onChange: (value: number, high?: number) => void
   /** Fired once when the user releases a handle (rzslider's onEnd). */
   onEnd?: (value: number, high?: number) => void
+  /** Text for the value bubbles (rzslider's `translate`); the raw number when omitted. */
+  format?: (value: number) => string
   style?: CSSProperties
 }
 
@@ -34,6 +36,7 @@ export function RzSlider({
   disabled = false,
   onChange,
   onEnd,
+  format,
   style,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -106,7 +109,7 @@ export function RzSlider({
       className="rz-bubble"
       style={vertical ? { bottom: pos(t) } : { left: center(t), transform: 'translateX(-50%)' }}
     >
-      {v}
+      {format ? format(v) : v}
     </span>
   )
 

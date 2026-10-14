@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { AggregatedSpectrum, Sensor } from '../api/types'
@@ -72,6 +72,16 @@ const FREQ_RESOLUTIONS = [10_000, 100_000, 1_000_000, 10_000_000, 100_000_000]
 const YLIM: [number, number] = [0, 60]
 /** Fixed SNR threshold above which a channel counts as occupied (occupancy.js). */
 const OCCUPANCY_THRESHOLD_DB = 15
+// Loaded on first use: h3-js reserves 32 MB of memory as soon as it is imported,
+// which time-view users shouldn't pay for.
+const SpecMonMapView = lazy(() =>
+  import('../components/specmon/SpecMonMapView').then((m) => ({ default: m.SpecMonMapView })),
+)
+
+/** Synthetic map data is centred here when the sensor has no position (demo-zurich). */
+const DEFAULT_MAP_CENTER: [number, number] = [47.3769, 8.5417]
+
+type SpecMonView = 'time' | 'map'
 
 export default function SpecMonPage() {
   const { user, isAdmin } = useAuth()
@@ -83,6 +93,7 @@ export default function SpecMonPage() {
     name: '',
   })
   const [senSelDialog, setSenSelDialog] = useState(false)
+  const [view, setView] = useState<SpecMonView>(searchParams.get('view') === 'map' ? 'map' : 'time')
 
   const [startTime, setStartTime] = useState(() => new Date(Date.now() - 3600_000))
   const [aggFun, setAggFun] = useState<'AVG' | 'MAX'>('AVG')
@@ -244,11 +255,14 @@ export default function SpecMonPage() {
 
   useEffect(() => {
     setSearchParams(
-      sensor.serial ? { sensor: sensor.serial } : {},
+      {
+        ...(sensor.serial ? { sensor: sensor.serial } : {}),
+        ...(view === 'map' ? { view } : {}),
+      },
       { replace: true },
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sensor.serial])
+  }, [sensor.serial, view])
 
   // Auto-load the plot once the sensor serial is first resolved (e.g. from the URL ?sensor= param).
   useEffect(() => {
@@ -362,8 +376,51 @@ export default function SpecMonPage() {
     return out
   }, [allSensors])
 
+  const mapCenter: [number, number] = useMemo(() => {
+    const s = allSensors.find((a) => String(a.serial) === sensor.serial)
+    const lat = Number(s?.position?.latitude ?? s?.latitude ?? s?.lat)
+    const lon = Number(s?.position?.longitude ?? s?.longitude ?? s?.lon)
+    return Number.isFinite(lat) && Number.isFinite(lon) ? [lat, lon] : DEFAULT_MAP_CENTER
+  }, [allSensors, sensor.serial])
+
+  const viewToggle = (
+    <div className="btn-group btn-group-sm specmon-view-toggle" role="group" aria-label="Spectrum view">
+      <button
+        type="button"
+        className={`btn ${view === 'time' ? 'btn-primary active' : 'btn-default'}`}
+        aria-pressed={view === 'time'}
+        onClick={() => setView('time')}
+      >
+        <i className="glyphicon glyphicon-time" /> Time view
+      </button>
+      <button
+        type="button"
+        className={`btn ${view === 'map' ? 'btn-primary active' : 'btn-default'}`}
+        aria-pressed={view === 'map'}
+        onClick={() => {
+          setLiveMode(false)
+          setView('map')
+        }}
+      >
+        <i className="glyphicon glyphicon-map-marker" /> Map view
+      </button>
+    </div>
+  )
+
+  if (view === 'map') {
+    return (
+      <div className="container-fluid">
+        {viewToggle}
+        <Suspense fallback={<div className="es-loader" />}>
+          <SpecMonMapView center={mapCenter} occupancyThresholdDb={OCCUPANCY_THRESHOLD_DB} />
+        </Suspense>
+      </div>
+    )
+  }
+
   return (
     <div className="container-fluid">
+      {viewToggle}
       <div className="row">
         <div className="col-sm-12">
           {/* controls: sensor/date/time + zoom/aggregation/live-mode bars */}

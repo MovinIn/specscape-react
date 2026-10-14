@@ -1235,3 +1235,144 @@ span.sw-default-value-header {
 .campaign-list-sensors {
     width: 100px;
 }
+
+/* Spectrum monitor: time/map view toggle and H3 map view */
+.specmon-view-toggle {
+  margin: 8px 0;
+}
+
+.specmon-map-controls {
+  text-align: left;
+  padding: 4px 8px;
+}
+
+.specmon-map-controls .form-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.specmon-map-controls label {
+  margin: 0;
+}
+
+.specmon-map-controls .map-mhz {
+  width: 90px;
+}
+
+.specmon-map-window {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
+}
+
+.specmon-map-window .rzslider {
+  margin: 30px 0 10px 0;
+}
+
+.specmon-map-label {
+  font-weight: bold;
+  min-width: 7em;
+}
+
+.specmon-map-sensors {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 0 8px 4px;
+}
+
+.specmon-map-sensors .checkbox-inline {
+  margin: 0;
+  padding-left: 0;
+}
+
+.specmon-map-sensors .checkbox-inline input {
+  position: static;
+  margin: 0 4px 0 0;
+}
+
+.specmon-map-sep {
+  color: #bbbbbb;
+}
+
+.specmon-map-note {
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  font-size: 0.9em;
+}
+
+.specmon-map-loader {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  margin-left: -43px;
+  z-index: 1000;
+  background-color: rgba(255, 255, 255, 0.85);
+}
+
+.specmon-map-cell h4,
+.specmon-map-spectrum-title {
+  margin-top: 6px;
+}
+
+.specmon-map-cell th {
+  width: 40%;
+}
+
+.specmon-map-cell code {
+  font-size: 0.85em;
+}
+
+.h3-legend {
+  position: absolute;
+  left: 10px;
+  bottom: 22px;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #333333;
+  width: 230px;
+  pointer-events: none;
+}
+
+.h3-legend-title {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.h3-legend-bar {
+  height: 10px;
+  border-radius: 2px;
+}
+
+.h3-legend-ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+  color: #555555;
+}
+
+.h3-legend-key {
+  margin-top: 5px;
+  color: #555555;
+}
+
+.h3-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 10px;
+  vertical-align: middle;
+  background: rgb(240, 59, 32);
+  border: 1px solid rgba(60, 60, 60, 0.35);
+}
+
+.h3-map .leaflet-tile-pane {
+  filter: grayscale(1) brightness(1.06) contrast(0.85);
+}

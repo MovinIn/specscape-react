@@ -12,6 +12,7 @@
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.3.1",
     "bootstrap-sass": "^3.4.3",
+    "h3-js": "^4.5.0",
     "highcharts": "6.2.0",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
