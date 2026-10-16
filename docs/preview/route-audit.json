@@ -1,0 +1,251 @@
+{
+  "checkedAt": "2026-10-16T03:31:45.548Z",
+  "routes": [
+    {
+      "brokenImages": [],
+      "heading": "A world of signals.A new perspective.",
+      "overflow": false,
+      "path": "/"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Find your perspective.",
+      "overflow": false,
+      "path": "/sensors"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Sensor management",
+      "overflow": false,
+      "path": "/sensors/manage"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Add sensor",
+      "overflow": false,
+      "path": "/sensors/add"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Edit sensor",
+      "overflow": false,
+      "path": "/sensors/1"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Signals, in perspective.",
+      "overflow": false,
+      "path": "/specmon?sensor=11259375"
+    },
+    {
+      "brokenImages": [],
+      "heading": "A new dimension of discovery.",
+      "overflow": false,
+      "path": "/specmon?view=map&sensor=11259375"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Spectrum Decoder",
+      "overflow": false,
+      "path": "/spectrum-decoder"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Frequency Channel Occupancy",
+      "overflow": false,
+      "path": "/occupancy"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Ranking",
+      "overflow": false,
+      "path": "/ranking"
+    },
+    {
+      "brokenImages": [],
+      "heading": "IQ Data Sets",
+      "overflow": false,
+      "path": "/iq-datasets"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Users",
+      "overflow": false,
+      "path": "/admin/users"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Campaign Management",
+      "overflow": false,
+      "path": "/campaign-management"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Sponsoring applications",
+      "overflow": false,
+      "path": "/sensor-application-list"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Sponsoring application",
+      "overflow": false,
+      "path": "/sensor-application/1"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Statistics",
+      "overflow": false,
+      "path": "/sensor-application-statistics"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Streaming operations",
+      "overflow": false,
+      "path": "/spectrum-decoder-status"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Sensor Registration Token",
+      "overflow": false,
+      "path": "/sensor-token"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Edit Profile",
+      "overflow": false,
+      "path": "/account/edit"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Create a SpecScape Account",
+      "overflow": false,
+      "path": "/account/register"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Account Recovery",
+      "overflow": false,
+      "path": "/account/recover"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Account Recovery",
+      "overflow": false,
+      "path": "/account/recover/demo/preview"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Activate account",
+      "overflow": false,
+      "path": "/account/activate/demo/preview"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Reactivate account",
+      "overflow": false,
+      "path": "/account/reactivate/demo/preview"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Full access.Zero friction.",
+      "overflow": false,
+      "path": "/login"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Full access.Zero friction.",
+      "overflow": false,
+      "path": "/logout"
+    },
+    {
+      "brokenImages": [],
+      "heading": "SpecScape Data API",
+      "overflow": false,
+      "path": "/api-spec"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Datasets",
+      "overflow": false,
+      "path": "/datasets"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Publications",
+      "overflow": false,
+      "path": "/publications"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Compatible Hardware",
+      "overflow": false,
+      "path": "/hardware"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Open Source Software & Hardware",
+      "overflow": false,
+      "path": "/open-source"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Partners",
+      "overflow": false,
+      "path": "/partners"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Frequently Asked Questions",
+      "overflow": false,
+      "path": "/faq"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Contact",
+      "overflow": false,
+      "path": "/contact"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Join SpecScape",
+      "overflow": false,
+      "path": "/join"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Contribute",
+      "overflow": false,
+      "path": "/contribute"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Sensor Installation and Setup",
+      "overflow": false,
+      "path": "/sensor-setup"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Work with Us",
+      "overflow": false,
+      "path": "/work-with-us"
+    },
+    {
+      "brokenImages": [],
+      "heading": "General Terms of Use & Data License Agreement",
+      "overflow": false,
+      "path": "/terms-of-service"
+    },
+    {
+      "brokenImages": [],
+      "heading": "Privacy Policy",
+      "overflow": false,
+      "path": "/privacy-policy"
+    }
+  ],
+  "consoleErrors": [],
+  "previewTests": 6,
+  "buildModes": [
+    "preview",
+    "backend"
+  ]
+}
