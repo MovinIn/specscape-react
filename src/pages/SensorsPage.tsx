@@ -9,7 +9,7 @@ import { isPreview } from '../config/navigation'
 import { sensorMarkers, sensorMatches, sensorPosition } from '../lib/sensors'
 
 export default function SensorsPage() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, backendAuthenticated } = useAuth()
   const [entries, setEntries] = useState<SensorStatusEntry[]>([])
   const searchRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
@@ -36,7 +36,7 @@ export default function SensorsPage() {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [attempt])
+  }, [attempt, backendAuthenticated])
 
   const sensors = useMemo(
     () => entries.flatMap((e) => (e.staticInfo ? [e.staticInfo] : [])),
@@ -320,6 +320,9 @@ export default function SensorsPage() {
         <span>
           Sensor status refreshes every 10 seconds.
           {isPreview && ' All sensors shown are illustrative sample data.'}
+          {!isPreview &&
+            !backendAuthenticated &&
+            ' Public live catalog; controller details require backend access.'}
         </span>
         <Link to="/sensors/manage">
           Advanced sensor management <span aria-hidden="true">↗</span>

@@ -9,6 +9,7 @@ import {
 } from '../src/lib/geoSpectrum.ts'
 import { sensorPosition, sensorMatches } from '../src/lib/sensors.ts'
 import { sampleAvro, sampleIq } from '../src/lib/previewDownloads.ts'
+import { geoMeasurements } from '../src/lib/geoMeasurements.ts'
 
 Object.defineProperty(globalThis, 'localStorage', {
   value: new (class {
@@ -282,4 +283,70 @@ test('sample Raw and Avro downloads contain valid float I/Q blocks', () => {
   assert.deepEqual(bytes.slice(offset, offset + 8192), raw)
   offset += 8192
   assert.deepEqual(bytes.slice(offset), sync)
+})
+
+test('real H3 adapter preserves received values, time, positions and missing bins', () => {
+  const query = {
+    timeBegin: 100,
+    timeEnd: 220,
+    freqMin: 100e6,
+    freqMax: 103e6,
+    aggFreq: 1e6,
+    aggTime: 60,
+  }
+  const ds = geoMeasurements(
+    [
+      {
+        sensor: {
+          serial: 1,
+          name: 'Fixed station',
+          latitude: 47,
+          longitude: 8,
+        },
+        spectrum: {
+          startFreq: 100e6,
+          freqRes: 1e6,
+          startTime: 100,
+          timeRes: 60,
+          values: [
+            [10, null, 30],
+            [null, null, null],
+            [20, 40, 50],
+          ],
+        },
+      },
+    ],
+    query,
+  )
+  assert.equal(ds.synthetic, false)
+  assert.equal(ds.samples.length, 2)
+  assert.equal(ds.samples[1].time, 220)
+  assert.equal(ds.samples[0].lat, 47)
+  assert.equal(ds.samples[0].lon, 8)
+  assert.equal(ds.samples[0].values[0], 10)
+  assert.ok(Number.isNaN(ds.samples[0].values[1]))
+  const cells = aggregateCells(ds, {
+    freqMin: 100e6,
+    freqMax: 103e6,
+    timeBegin: 100,
+    timeEnd: 220,
+    res: 8,
+    metric: 'AVG',
+    threshold: 15,
+  })
+  assert.equal(cells.size, 1)
+  assert.equal(geoMeasurements([], query).samples.length, 0)
+  assert.throws(
+    () =>
+      geoMeasurements(
+        [
+          {
+            sensor: { serial: 1, latitude: 0, longitude: 0 },
+            spectrum: { freqRes: 2e6, values: [[1, 2, 3]] },
+          },
+        ],
+        query,
+      ),
+    /incompatible/,
+  )
 })

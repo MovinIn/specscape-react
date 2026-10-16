@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { AggregatedSpectrum, Sensor } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
@@ -103,7 +103,8 @@ const DEFAULT_MAP_CENTER: [number, number] = [47.3769, 8.5417]
 type SpecMonView = 'time' | 'map'
 
 export default function SpecMonPage() {
-  const { user, isAdmin } = useAuth()
+  const { user, backendIsAdmin, backendAuthenticated } = useAuth()
+  const isAdmin = isPreview || backendIsAdmin
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [allSensors, setAllSensors] = useState<Sensor[]>([])
@@ -243,6 +244,11 @@ export default function SpecMonPage() {
       freqRes?: number
       isUpdate?: boolean
     }) => {
+      if (!isPreview && !backendAuthenticated) {
+        setSpec(null)
+        setStatusMessage('Backend access required for real measurements')
+        return
+      }
       if (!sensor.serial) {
         setStatusMessage('Select a sensor')
         return
@@ -297,11 +303,14 @@ export default function SpecMonPage() {
           setStatusMessage('Could not zoom: No Data')
         } else {
           setSpec(null)
-          setStatusMessage('No data')
+          setStatusMessage('No archived measurements in this time window.')
         }
-      } catch {
+      } catch (error) {
         setIsError(true)
-        setStatusMessage('Request failed')
+        setSpec(null)
+        setStatusMessage(
+          error instanceof Error ? error.message : 'Request failed',
+        )
         setRetrievalMs(Date.now() - t0)
       } finally {
         setLoading(false)
@@ -316,6 +325,7 @@ export default function SpecMonPage() {
       timeRes,
       aggFun,
       matrix,
+      backendAuthenticated,
     ],
   )
 
@@ -358,7 +368,7 @@ export default function SpecMonPage() {
     if (!sensor.serial) return
     void load({ startFreq: 0, maxFreq: 11_900_000_000, freqRes: 10_000_000 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sensor.serial])
+  }, [sensor.serial, backendAuthenticated])
 
   function isAllowedFreq(freq: number): boolean {
     if (isAdmin) return freq >= 10_000
@@ -532,8 +542,8 @@ export default function SpecMonPage() {
             <span className="lx-pulse-dot" /> Spatial lab
           </span>
           <span>
-            Centered on {sensor.name || 'the selected sensor'} · Synthetic
-            mobile measurements
+            Centered on {sensor.name || 'the selected sensor'} · Choose a data
+            source below
           </span>
           <select
             className="lx-map-center-select"
@@ -566,7 +576,6 @@ export default function SpecMonPage() {
           }
         >
           <SpecMonMapView
-            key={mapCenter.join(',')}
             center={mapCenter}
             occupancyThresholdDb={OCCUPANCY_THRESHOLD_DB}
           />
@@ -810,6 +819,20 @@ export default function SpecMonPage() {
               <span aria-hidden="true">/</span> {formatHz(freqRes)} resolution
             </span>
           </div>
+          {!isPreview &&
+            !loading &&
+            !isError &&
+            statusMessage.startsWith('No archived') && (
+              <div className="lx-notice">
+                There are no archived sweeps for this sensor in the selected
+                interval.{' '}
+                <Link
+                  to={`/spectrum-decoder?sensor=${encodeURIComponent(sensor.serial)}`}
+                >
+                  Open the live signal instead ↗
+                </Link>
+              </div>
+            )}
 
           {/* waterfall */}
           <div style={{ width: '100%', textAlign: 'center' }}>

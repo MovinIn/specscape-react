@@ -14,11 +14,22 @@ import type {
 } from './types'
 import { isHtmlPayload } from './mock'
 import { previewRequest } from './previewStore'
+import { isPreview as useMock } from '../config/runtime'
 
 const API_ROOT = '/api'
-const useMock =
-  import.meta.env.VITE_USE_MOCK_API === 'true' ||
-  import.meta.env.VITE_USE_MOCK_API === '1'
+let hasBackendSession = false
+function rememberPrincipal(text: string) {
+  try {
+    hasBackendSession = Boolean(JSON.parse(text)?.username)
+  } catch {
+    hasBackendSession = false
+  }
+}
+function accessDenied(error: unknown) {
+  return [401, 403].includes(
+    Number((error as { status?: number } | null)?.status),
+  )
+}
 
 function getCookie(name: string): string | null {
   const match = document.cookie.match(
@@ -83,8 +94,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       credentials: 'include',
     })
   } catch {
+    if (init.signal?.aborted) throw init.signal.reason
     throw new Error(`Network error: ${path}`)
   }
+  if (import.meta.env.DEV && path.startsWith('/spectrum/aggregated'))
+    console.info(`[SpecScape] Spectrum API: HTTP ${res.status}`)
 
   if (!res.ok) {
     let body: unknown
@@ -93,7 +107,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch {
       body = undefined
     }
-    const err = new Error(`API ${res.status}: ${path}`) as Error & {
+    const detail =
+      Array.isArray(body) && typeof body[0] === 'string'
+        ? body[0]
+        : res.status === 403
+          ? 'Backend access is required'
+          : ''
+    const err = new Error(
+      `${detail || 'API request failed'} (${res.status})`,
+    ) as Error & {
       status?: number
       data?: unknown
     }
@@ -199,6 +221,7 @@ export const api = {
         })
         const retryText = await retry.text()
         if (!isHtmlPayload(retryText)) {
+          rememberPrincipal(retryText)
           return new Response(retryText, {
             status: retry.status,
             headers: retry.headers,
@@ -212,6 +235,7 @@ export const api = {
         return new Response(null, { status: 502 })
       }
 
+      rememberPrincipal(text)
       return new Response(text, { status: res.status, headers: res.headers })
     })()
   },
@@ -250,12 +274,32 @@ export const api = {
     )
   },
 
-  getSensors() {
-    return request<Sensor[]>('/sensor/list')
+  async getSensors() {
+    if (!useMock && !hasBackendSession)
+      return (await request<NetworkStats>('/network/stats')).sensors ?? []
+    try {
+      return await request<Sensor[]>('/sensor/list')
+    } catch (error) {
+      if (!useMock && accessDenied(error))
+        return (await request<NetworkStats>('/network/stats')).sensors ?? []
+      throw error
+    }
   },
 
-  getSensorStatus() {
-    return request<SensorStatusEntry[]>('/sensor/status/list')
+  async getSensorStatus() {
+    if (!useMock && !hasBackendSession)
+      return (
+        (await request<NetworkStats>('/network/stats')).sensors ?? []
+      ).map((staticInfo) => ({ staticInfo }))
+    try {
+      return await request<SensorStatusEntry[]>('/sensor/status/list')
+    } catch (error) {
+      if (!useMock && accessDenied(error))
+        return (
+          (await request<NetworkStats>('/network/stats')).sensors ?? []
+        ).map((staticInfo) => ({ staticInfo }))
+      throw error
+    }
   },
 
   getSensor(id: string | number) {
@@ -462,17 +506,20 @@ export const api = {
    * production UI sends and makes the response include the `bands` and
    * `noiseFloor` fields.
    */
-  getSpectrum(params: {
-    sensor: string | number
-    timeBegin: number
-    timeEnd: number
-    freqMin?: number
-    freqMax?: number
-    aggFreq: number
-    aggTime: number
-    aggFun?: 'AVG' | 'MAX'
-  }) {
-    return request<AggregatedSpectrum>(
+  getSpectrum(
+    params: {
+      sensor: string | number
+      timeBegin: number
+      timeEnd: number
+      freqMin?: number
+      freqMax?: number
+      aggFreq: number
+      aggTime: number
+      aggFun?: 'AVG' | 'MAX'
+    },
+    signal?: AbortSignal,
+  ) {
+    return request<AggregatedSpectrum | undefined>(
       `/spectrum/aggregated${qs({
         freqMin: 20000000,
         freqMax: 1700000000,
@@ -480,7 +527,8 @@ export const api = {
         extended: true,
         ...params,
       })}`,
-    )
+      { signal },
+    ).then((data) => data ?? { values: [] })
   },
 }
 

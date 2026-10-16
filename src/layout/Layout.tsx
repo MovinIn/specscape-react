@@ -6,10 +6,14 @@ import { ScrollToTop } from '../components/ScrollToTop'
 import { Footer } from './Footer'
 import { Navbar } from './Navbar'
 import { getPageInfo } from '../config/pages'
+import { useAuth } from '../auth/AuthContext'
+import { BackendAccess } from '../components/BackendAccess'
+import { isPreview } from '../config/runtime'
 
 export function Layout() {
   const { pathname, search } = useLocation()
   const info = getPageInfo(pathname)
+  const { backendAuthenticated } = useAuth()
   const mainRef = useRef<HTMLElement>(null)
   useEffect(() => {
     mainRef.current?.focus({ preventScroll: true })
@@ -36,6 +40,11 @@ export function Layout() {
             </div>
           )}
           <div className={info ? 'lx-page-content' : undefined}>
+            {!isPreview &&
+              !backendAuthenticated &&
+              ['/specmon', '/spectrum-decoder', '/sensors/manage'].includes(
+                pathname,
+              ) && <BackendAccess />}
             <Outlet />
           </div>
         </div>

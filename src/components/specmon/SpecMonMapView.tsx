@@ -6,6 +6,9 @@ import {
   useState,
 } from 'react'
 import { getGeoSpectrum, type SyntheticSource } from '../../api/geoSpectrum'
+import { getLiveGeoSpectrum } from '../../api/liveGeoSpectrum'
+import { isPreview } from '../../config/runtime'
+import { useAuth } from '../../auth/AuthContext'
 import {
   aggregateCells,
   BAND_PRESETS,
@@ -24,7 +27,7 @@ import { EsBarPlot } from './EsBarPlot'
 import { H3HeatmapMap, type MapTrack } from './H3HeatmapMap'
 
 type Props = {
-  /** Where to centre the synthetic data: the selected sensor's position. */
+  /** Selected sensor position, used as the centre of the measurement area. */
   center: [number, number]
   /** SNR threshold for the occupancy metric, shared with the time view. */
   occupancyThresholdDb: number
@@ -59,10 +62,13 @@ function fitDomain(cells: CellStat[]): [number, number] | null {
 }
 
 /**
- * Spectrum monitor map view: geo-tagged sweeps from mobile sensors, binned
- * onto H3 hexagons and coloured by the chosen metric for the chosen band.
+ * Real fixed-sensor measurements (or explicit demo drives), binned onto H3
+ * hexagons and coloured by the selected metric and frequency band.
  */
 export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
+  const { backendAuthenticated, checkingSession } = useAuth()
+  const [dataSource, setDataSource] = useState<'demo' | 'fixed'>('demo')
+  const useDemoData = isPreview || dataSource === 'demo'
   /** The loaded dataset, tagged with the centre it was loaded for. */
   const [loaded, setLoaded] = useState<{
     key: string
@@ -88,34 +94,68 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
 
   const [lat, lon] = center
   const centerKey = `${lat},${lon}`
+  const [revision, setRevision] = useState(0)
+  const sourceKey = `${centerKey}/${useDemoData ? 'demo' : `${freqMin},${freqMax}/${backendAuthenticated}/${checkingSession}`}/${revision}`
   useEffect(() => {
     let cancelled = false
-    getGeoSpectrum({
-      center: [lat, lon],
-      endTime: Math.floor(Date.now() / 60_000) * 60,
-    })
-      .then((d) => {
-        if (cancelled) return
-        setLoaded({ key: `${lat},${lon}`, ds: d })
-        setWindow([d.startTime, d.endTime])
-        setSelectedId(null)
-      })
-      .catch(
-        () =>
-          !cancelled &&
-          setLoaded({
-            key: `${lat},${lon}`,
-            ds: null,
-            error: 'Could not load geo-tagged spectrum',
-          }),
-      )
+    const controller = new AbortController()
+    const timer = window.setTimeout(
+      () => {
+        const request = useDemoData
+          ? getGeoSpectrum({
+              center: [lat, lon],
+              endTime: Math.floor(Date.now() / 60_000) * 60,
+            })
+          : !backendAuthenticated
+            ? Promise.reject(
+                new Error(
+                  checkingSession
+                    ? 'Checking backend access…'
+                    : 'Backend access is required to load real spectrum measurements.',
+                ),
+              )
+            : freqMax <= freqMin
+              ? Promise.reject(new Error('Choose a valid frequency range.'))
+              : getLiveGeoSpectrum({
+                  center: [lat, lon],
+                  freqMin,
+                  freqMax,
+                  endTime: Math.floor(Date.now() / 60_000) * 60,
+                  signal: controller.signal,
+                })
+        request
+          .then((d) => {
+            if (cancelled) return
+            setLoaded({ key: sourceKey, ds: d })
+            setWindow([d.startTime, d.endTime])
+            setSelectedId(null)
+          })
+          .catch(
+            (error: unknown) =>
+              !cancelled &&
+              setLoaded({
+                key: sourceKey,
+                ds: null,
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : 'Could not load geo-tagged spectrum',
+              }),
+          )
+      },
+      useDemoData ? 0 : 300,
+    )
     return () => {
       cancelled = true
+      controller.abort()
+      window.clearTimeout(timer)
     }
-  }, [lat, lon])
-  const ds = loaded?.key === centerKey ? loaded.ds : null
-  const error = loaded?.key === centerKey ? (loaded.error ?? null) : null
-  const loading = loaded?.key !== centerKey
+    // sourceKey includes all live query inputs; demo bands reuse their full spectrum.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceKey])
+  const ds = loaded?.key === sourceKey ? loaded.ds : null
+  const error = loaded?.key === sourceKey ? (loaded.error ?? null) : null
+  const loading = loaded?.key !== sourceKey
 
   const res = resMode === 'auto' ? resForZoom(zoom) : resMode
   // Dragging the time slider re-bins every sweep; let React keep the slider responsive.
@@ -158,7 +198,7 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
     fitted ?? (metric === 'OCC' ? OCC_DOMAIN : SNR_DOMAIN)
 
   const tracks: MapTrack[] = useMemo(() => {
-    if (!ds || !deferredWindow || !showTracks) return []
+    if (!ds || !ds.synthetic || !deferredWindow || !showTracks) return []
     return ds.sensors
       .filter((s) => !hiddenSensors.has(s.serial))
       .map((s) => ({
@@ -248,6 +288,23 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
 
   return (
     <div>
+      <div className="es-sbar lx-spatial-source">
+        <label htmlFor="map-source">Data source</label>
+        <select
+          id="map-source"
+          className="form-control"
+          value={dataSource}
+          onChange={(event) =>
+            setDataSource(event.target.value as 'demo' | 'fixed')
+          }
+        >
+          <option value="demo">Mobile H3 preview · simulated</option>
+          <option value="fixed" disabled={isPreview}>
+            Fixed sensor history · real API
+          </option>
+        </select>
+        <span>Live mobile measurements are awaiting backend integration.</span>
+      </div>
       <div className="es-sbar specmon-map-controls">
         <form
           className="lx-spatial-fields"
@@ -393,14 +450,16 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
             </label>
           ))}
           <span className="specmon-map-sep">|</span>
-          <label className="checkbox-inline">
-            <input
-              type="checkbox"
-              checked={showTracks}
-              onChange={(e) => setShowTracks(e.target.checked)}
-            />{' '}
-            Tracks
-          </label>
+          {useDemoData && (
+            <label className="checkbox-inline">
+              <input
+                type="checkbox"
+                checked={showTracks}
+                onChange={(e) => setShowTracks(e.target.checked)}
+              />{' '}
+              Tracks
+            </label>
+          )}
           {ds?.sources && (
             <label
               className="checkbox-inline"
@@ -424,11 +483,30 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
       )}
       {ds?.synthetic && (
         <div className="alert alert-warning specmon-map-note" role="status">
-          <strong>Synthetic data.</strong> Mobile sensors don&apos;t report
-          positions yet, so this view shows simulated drives around the selected
-          sensor past modelled FM, TV, cellular, Wi-Fi and ISM transmitters.
+          <strong>Simulated H3 preview.</strong> Real mobile measurements are
+          awaiting backend integration. These drives and signal levels are
+          generated for exploring the map controls, not received from sensors.
         </div>
       )}
+      {!useDemoData && (
+        <div className="alert alert-info specmon-map-note" role="status">
+          <strong>Real spectrum measurements.</strong> Each hexagon uses API
+          measurements at the reported position of a fixed sensor. Unmeasured
+          areas stay empty unless estimated gap fill is explicitly enabled.{' '}
+          <button
+            type="button"
+            className="btn btn-default btn-xs"
+            onClick={() => setRevision((value) => value + 1)}
+          >
+            Refresh measurements
+          </button>
+        </div>
+      )}
+      {ds?.warnings?.length ? (
+        <div className="alert alert-warning" role="status">
+          {ds.warnings.join(' · ')}
+        </div>
+      ) : null}
       {error && (
         <div className="alert alert-danger" role="alert">
           {error}
@@ -437,6 +515,7 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
 
       <div style={{ position: 'relative' }}>
         <H3HeatmapMap
+          key={centerKey}
           cells={cells}
           domain={domain}
           legendTitle={legendTitle}

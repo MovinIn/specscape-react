@@ -79,6 +79,44 @@ select {
 .lx-skip:focus {
   top: 12px;
 }
+.lx-backend-access {
+  padding: 20px 24px;
+  margin: 0 0 24px;
+  border: 1px solid #e0d9ee;
+  border-radius: 10px;
+  background: linear-gradient(120deg, #f5f1fc, #f8faff);
+  color: #62516f;
+}
+.lx-backend-access > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lx-backend-access p {
+  font-size: 13px;
+  line-height: 1.8;
+  max-width: 85ch;
+  margin: 10px 0;
+}
+.lx-backend-access a {
+  font-size: 13px;
+  color: #744bd0;
+}
+.lx-backend-access small {
+  display: block;
+  margin-top: 12px;
+  font-size: 11px;
+  color: #786b86;
+}
+.lx-backend-access.is-block {
+  padding: 36px;
+}
+.lx-backend-access h1 {
+  font-size: 36px;
+  color: #25212e;
+  margin: 0 0 30px;
+  letter-spacing: -1.3px;
+}
 .lx-sidebar {
   position: fixed;
   inset: 0 auto 0 0;
@@ -2147,6 +2185,24 @@ select {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+.lx-spatial-source {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px;
+}
+.lx-spatial-source label {
+  margin: 0;
+}
+.lx-spatial-source .form-control {
+  width: 280px;
+}
+.lx-spatial-source > span {
+  color: var(--lx-muted);
+  font-size: 12px;
 }
 
 .lx-monitor .lx-spatial-fields {

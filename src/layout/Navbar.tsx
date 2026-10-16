@@ -6,6 +6,7 @@ import { getPageInfo } from '../config/pages'
 import {
   adminLinks,
   isPreview,
+  isLocalAdmin,
   moreLinks,
   researchTools,
   resourceLinks,
@@ -42,7 +43,7 @@ export function Brand() {
 }
 
 export function Navbar() {
-  const { authenticated, isAdmin, user } = useAuth()
+  const { authenticated, isAdmin, user, backendAuthenticated } = useAuth()
   const { pathname, search } = useLocation()
   const [mobile, setMobile] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -249,8 +250,10 @@ export function Navbar() {
               <span>
                 {authenticated ? user?.username : 'Your account'}
                 <small>
-                  {isPreview
-                    ? 'Administrator'
+                  {isLocalAdmin
+                    ? isPreview
+                      ? 'Sample data · Administrator'
+                      : 'Local administrator'
                     : authenticated
                       ? 'Research workspace'
                       : 'Sign in to get started'}
@@ -259,7 +262,7 @@ export function Navbar() {
               <span>⌃</span>
             </summary>
             <div>
-              {authenticated ? (
+              {backendAuthenticated ? (
                 <>
                   <Link to="/account/edit" onClick={close}>
                     Account settings
@@ -271,7 +274,7 @@ export function Navbar() {
               ) : (
                 <>
                   <Link to="/login" onClick={close}>
-                    Sign in
+                    Backend connection
                   </Link>
                   <Link to="/account/register" onClick={close}>
                     Create account
@@ -323,7 +326,11 @@ export function Navbar() {
           </button>
           <span className="lx-preview-tag">
             <span />
-            {isPreview ? 'Administrator preview' : 'Research workspace'}
+            {isPreview
+              ? 'Sample data · offline demo'
+              : backendAuthenticated
+                ? 'Live API · connected'
+                : 'Live API · public access'}
           </span>
           <Link to="/api-spec" className="lx-topbar-docs">
             Documentation <span aria-hidden="true">↗</span>

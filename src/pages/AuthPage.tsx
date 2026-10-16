@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 
 export default function AuthPage() {
-  const { authenticated, login, logout } = useAuth()
+  const { backendAuthenticated, login, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
@@ -59,7 +59,7 @@ export default function AuthPage() {
       </div>
     )
 
-  if (authenticated) {
+  if (backendAuthenticated) {
     return (
       <div className="container">
         <div className="row">
@@ -89,16 +89,23 @@ export default function AuthPage() {
             </div>
           ) : (
             <div className="alert alert-info text-center">
-              <h2>Please sign in to use this feature</h2>
+              <h2>Connect a SpecScape backend account</h2>
             </div>
           )}
 
           <div className="well">
-            <h2>Sign In</h2>
+            <h2>Backend access</h2>
+            <p>
+              The workspace opens without login. Live spectrum and decoder
+              streams require access granted by specscape.org. This form is
+              available when the backend owner provides a development account.
+            </p>
             <form role="form" className="form" onSubmit={handleLogin}>
               <div className="form-group">
                 <input
                   type="text"
+                  aria-label="SpecScape username"
+                  autoComplete="username"
                   className="form-control"
                   placeholder="Username"
                   id="username"
@@ -110,6 +117,8 @@ export default function AuthPage() {
               <div className="form-group">
                 <input
                   type="password"
+                  aria-label="SpecScape password"
+                  autoComplete="current-password"
                   className="form-control"
                   placeholder="Password"
                   id="password"

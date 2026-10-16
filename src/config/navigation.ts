@@ -71,6 +71,4 @@ export const adminLinks = [
   ['/spectrum-decoder-status', 'Signaling status', 'tower-broadcast'],
 ] as const
 
-export const isPreview =
-  import.meta.env.VITE_USE_MOCK_API === 'true' ||
-  import.meta.env.VITE_USE_MOCK_API === '1'
+export { isPreview, isLocalAdmin } from './runtime'

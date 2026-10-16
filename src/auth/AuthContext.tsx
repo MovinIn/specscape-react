@@ -1,7 +1,5 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
@@ -9,26 +7,15 @@ import {
 } from 'react'
 import { api } from '../api/client'
 import type { Principal } from '../api/types'
-import { isPreview } from '../config/navigation'
+import { isPreview, isLocalAdmin } from '../config/runtime'
+import {
+  AuthContext,
+  type AuthContextValue,
+  type AuthUser,
+} from './sessionContext'
+export { useAuth } from './sessionContext'
 
-type AuthUser = {
-  username: string
-  admin?: boolean
-}
-
-type AuthContextValue = {
-  user: AuthUser | null
-  authenticated: boolean
-  isAdmin: boolean
-  jwt: string | null
-  login: (username: string, password: string) => Promise<boolean>
-  logout: () => Promise<void>
-  /** Re-fetch the principal to obtain a fresh JWT (legacy esAuth.refresh). */
-  refreshJwt: () => Promise<string | null>
-  loading: boolean
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null)
+const LOCAL_USER: AuthUser = { username: 'Linxiang', admin: true }
 
 /** The API returns the signaling JWT as `Authorization: Bearer <token>` on /user/principal. */
 function tokenFrom(res: Response): string | null {
@@ -44,7 +31,7 @@ function toBasicAuth(username: string, password: string) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(
+  const [backendUser, setUser] = useState<AuthUser | null>(
     isPreview ? { username: 'demo', admin: true } : null,
   )
   const [jwt, setJwt] = useState<string | null>(() =>
@@ -52,7 +39,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ? 'preview-local-only'
       : localStorage.getItem('authentication_token'),
   )
-  const [loading, setLoading] = useState(!isPreview)
+  const [checkingSession, setCheckingSession] = useState(!isPreview)
+  const user = backendUser ?? (isLocalAdmin ? LOCAL_USER : null)
+  const loading = !isLocalAdmin && checkingSession
 
   useEffect(() => {
     if (isPreview) return
@@ -62,7 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Session cookie (if any) is sent automatically; no credentials here.
         const res = await api.getPrincipal()
         if (!res.ok) {
-          if (!cancelled) setUser(null)
+          if (!cancelled) {
+            setUser(null)
+            setJwt(null)
+          }
           return
         }
         const principal = (await res.json()) as Principal
@@ -77,11 +69,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               ? { username: principal.username, admin: principal.admin }
               : null,
           )
+          if (!principal?.username) {
+            localStorage.removeItem('authentication_token')
+            setJwt(null)
+          }
         }
       } catch {
-        if (!cancelled) setUser(null)
+        if (!cancelled) {
+          setUser(null)
+          setJwt(null)
+        }
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) setCheckingSession(false)
       }
     })()
     return () => {
@@ -150,9 +149,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await api.getPrincipal()
       const token = res.ok ? tokenFrom(res) : null
+      const principal = res.ok ? ((await res.json()) as Principal) : null
+      setUser(
+        principal?.username
+          ? { username: principal.username, admin: principal.admin }
+          : null,
+      )
       if (token) {
         localStorage.setItem('authentication_token', token)
         setJwt(token)
+      } else {
+        localStorage.removeItem('authentication_token')
+        setJwt(null)
       }
       return token
     } catch {
@@ -160,27 +168,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  useEffect(() => {
+    if (isPreview) return
+    const refresh = () => {
+      void refreshJwt()
+    }
+    window.addEventListener('focus', refresh)
+    const timer = window.setInterval(refresh, 30_000)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      window.clearInterval(timer)
+    }
+  }, [refreshJwt])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       authenticated: Boolean(user),
-      isAdmin: Boolean(user?.admin),
+      isAdmin: isLocalAdmin || Boolean(backendUser?.admin),
+      backendAuthenticated: Boolean(backendUser),
+      backendIsAdmin: Boolean(backendUser?.admin),
+      checkingSession,
       jwt,
       login,
       logout,
       refreshJwt,
       loading,
     }),
-    [user, jwt, login, logout, refreshJwt, loading],
+    [
+      user,
+      backendUser,
+      jwt,
+      login,
+      logout,
+      refreshJwt,
+      loading,
+      checkingSession,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) {
-    throw new Error('useAuth must be used within AuthProvider')
-  }
-  return ctx
 }

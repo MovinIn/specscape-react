@@ -36,6 +36,7 @@ export type GeoSpectrumDataset = {
   samples: GeoSpectrumSample[]
   /** True while the data comes from the synthetic generator. */
   synthetic?: boolean
+  warnings?: string[]
 }
 
 /** AVG/MAX match the time view's aggregation; OCC is % of bins over threshold. */

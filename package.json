@@ -4,11 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --mode preview --host localhost --port 5176 --strictPort",
-    "build": "tsc -b && vite build --mode preview",
+    "dev": "vite --mode live --host localhost --port 5176 --strictPort",
+    "build": "tsc -b && vite build --mode live",
     "lint": "oxlint",
     "preview": "vite preview",
-    "dev:preview": "vite --mode preview --host localhost --port 5176 --strictPort",
+    "dev:preview": "vite --mode live --host localhost --port 5176 --strictPort",
+    "dev:demo": "vite --mode preview --host localhost --port 5177 --strictPort",
+    "build:demo": "tsc -b && vite build --mode preview",
     "dev:backend": "vite --mode development",
     "build:backend": "tsc -b && vite build",
     "test:preview": "node --test tests/preview.test.ts"

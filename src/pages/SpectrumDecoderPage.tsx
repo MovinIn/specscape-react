@@ -180,7 +180,7 @@ function highlight(text: string, query: string) {
 
 /** Exact port of streaming.html / streaming.js (StreamingController). */
 export default function SpectrumDecoderPage() {
-  const { jwt, refreshJwt } = useAuth()
+  const { jwt, refreshJwt, backendAuthenticated, checkingSession } = useAuth()
   const jwtRef = useRef(jwt)
   const refreshRef = useRef(refreshJwt)
   const [searchParams] = useSearchParams()
@@ -345,6 +345,11 @@ export default function SpectrumDecoderPage() {
 
   // constructor: load sensors, then initialize signaling
   useEffect(() => {
+    if (checkingSession) return
+    if (!isPreview && !backendAuthenticated) {
+      setSignalingStatus('disconnected')
+      return
+    }
     let cancelled = false
     let authRetries = 0
     let previewTimer: number | undefined
@@ -491,7 +496,7 @@ export default function SpectrumDecoderPage() {
       signalingRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [backendAuthenticated, checkingSession])
 
   // Local transport simulator: the normal signaling/WebRTC implementation is unchanged.
   useEffect(() => {
@@ -1233,7 +1238,8 @@ export default function SpectrumDecoderPage() {
         </div>
       </div>
 
-      {signalingStatus !== 'connected' ? (
+      {signalingStatus !== 'connected' &&
+      (isPreview || backendAuthenticated) ? (
         <div className="text-center white-overlay">
           {signalingStatus === 'connecting' ? (
             <div>
