@@ -1,43 +1,168 @@
-# SpecScape · Linxiang frontend
+# SpecScape · Linxiang Frontend
 
-独立的银白光谱风格前端，分支 `linxiang-frontend-update`，基于 H3 分支保留原页面和 API 流程。默认打开本地管理员工作台，数据默认连接真实 SpecScape 后端。
+An independent frontend redesign of SpecScape, built on the H3 branch and maintained on `linxiang-frontend-update`.
 
-## 运行
+The redesign preserves the existing pages and backend integration while improving visual consistency, navigation, and research workflows.
 
-使用 Node 24（`.nvmrc`）：
+## Design Direction
 
-```sh
+The interface combines Apple-inspired spacing and visual hierarchy, Solana-inspired spectral accents, and an industrial aesthetic.
+
+The visual system uses silver-white surfaces, graphite typography, fine borders, and purple, blue, and cyan accents. Subtle transitions and interaction feedback support the experience, with reduced-motion preferences respected.
+
+The current design focuses on desktop research workflows.
+
+## Getting Started
+
+Use **Node.js 24**, as specified in `.nvmrc`.
+
+```bash
 npm ci
 npm run dev
 ```
 
-打开 **http://localhost:5176/**。使用官网账户连接后端；同一浏览器中在 localhost:5173 建立的会话可由 5176 自动识别。本地管理员界面不改变服务端账户权限。未连接时可以查看真实公开网络信息，受保护的数据会显示连接提示。原三个版本的目录、分支和服务不受影响。
+Open:
 
-实时解码器已经验证收到 Greentree 的真实 PSD 和瀑布图。H3 移动测量尚待后端提供，因此保留清楚标注的模拟预览；可主动切换到固定传感器真实历史 API。真实模式没有测量的区域保持空白，接口失败或空数据时不会自动填入模拟信号。
+```text
+http://localhost:5176/
+```
 
-[完整预览指南](docs/FRONTEND_PREVIEW.md) 包含版本比较、功能清单、文件位置与验证结果。
+The default mode connects to the real SpecScape backend and displays the local administrator workspace.
 
-## 命令
+**Local administrator UI access does not grant administrator permissions on the backend.** Protected data and operations still require an authenticated account with the appropriate permissions.
 
-| 命令                                            | 用途                                  |
-| ----------------------------------------------- | ------------------------------------- |
-| `npm run dev` / `npm run dev:preview`           | 真实 API + 本地管理员界面，5176       |
-| `npm run build`                                 | 类型检查和真实 API 版本构建           |
-| `npm run dev:demo` / `npm run build:demo`       | 明确标注的离线样例模式，开发端口 5177 |
-| `npm run preview`                               | 浏览已构建版本                        |
-| `npm run lint`                                  | 静态检查                              |
-| `npm run test:preview`                          | 数据、H3 和文件格式测试               |
-| `npm run dev:backend` / `npm run build:backend` | 按真实账户权限显示界面                |
+## Authentication and Data Sources
 
-真实模式保留会话 cookie、CSRF、JWT 与 WebRTC。开发代理 `/api` 默认指向 `https://specscape.org`，TLS 校验开启；可用 `VITE_API_PROXY_TARGET` 指定服务，`VITE_RECAPTCHA_SITE_KEY` 配置验证码公钥。账户密码不写入源码或配置。
+### Real Backend
 
-## 技术和目录
+The default configuration uses real SpecScape APIs and preserves the existing session cookies, CSRF handling, JWT authentication, and WebSocket/WebRTC integration.
 
-React 19、TypeScript、Vite、React Router、Leaflet、H3 和 Highcharts。没有新增运行依赖。
+Sign in at `/login` using your SpecScape account.
 
-- `src/layout`、`src/config`：导航与公共布局
-- `src/auth`、`src/api`：认证、REST 与本地存储
-- `src/pages`：资料、账号、研究与管理页面
-- `src/components`：地图、图表、解码器和公共控件
-- `src/linxiang.css`：视觉与交互动效
-- `tests/preview.test.ts`：功能回归测试
+A session established on `localhost:5173` may also be recognized on `localhost:5176` within the same browser because localhost cookies are shared across ports. Chrome and the Codex in-app browser maintain separate sessions.
+
+Without authentication, public network information remains available. Protected features display an account connection prompt.
+
+Account passwords are not stored in source code or environment configuration.
+
+### H3 Spatial Preview
+
+Real mobile spatial measurements are still awaiting backend integration.
+
+The H3 view therefore defaults to **Mobile H3 preview · simulated**, with a visible notice explaining that the signal levels, routes, and transmitters are generated for demonstration.
+
+The preview supports:
+
+- Frequency presets and custom ranges
+- Mean SNR, peak SNR, and occupancy metrics
+- H3 resolution selection
+- Time-window and sensor filtering
+- Simulated tracks and transmitters
+- Optional estimated gap filling
+- Individual hexagon inspection and spectrum analysis
+
+An optional **Fixed sensor history · real API** source aggregates available historical measurements at reported fixed-sensor locations. This is distinct from real mobile spatial coverage.
+
+In the real-data source, missing measurements remain empty. Failed requests do not automatically fall back to simulated signals.
+
+### Offline Demo
+
+To explore sample data without a backend connection:
+
+```bash
+npm run dev:demo
+```
+
+Open:
+
+```text
+http://localhost:5177/
+```
+
+This explicitly labeled demo mode uses local sample data. Supported demo changes persist in browser localStorage. It does not send emails or control real hardware.
+
+## Implemented Improvements
+
+### Navigation and Usability
+
+- Persistent sidebar with Research and Administration areas
+- Direct access to core research tools
+- Expandable supporting resources
+- Command/Control + K page search with keyboard navigation
+- Consistent page headings, forms, tables, and feedback states
+
+### Sensor Workflows
+
+- Search and status filtering
+- Map and sensor-detail integration
+- Direct links to spectrum monitoring, H3 analysis, and decoding
+- Table-first sensor management
+- Duplicate checks and coordinate validation
+
+### Spectrum Monitoring
+
+- Reorganized sensor, date, time, and aggregation controls
+- Waterfall and power-spectrum visualization
+- Occupancy analysis
+- Zooming, panning, reset, and automatic refresh
+- Explicit empty-data and request-error messages
+
+### Signal Decoder
+
+- Existing WebSocket/WebRTC connection flow
+- Real-time PSD and waterfall rendering
+- Preserved frequency, gain, and volume controls
+- Nine decoder modes: FM, AM, ADS-B, AIS, ACARS, LTE, IoT, LoRa, and WiFi
+
+The existing I/Q dataset, ranking, account, campaign, sponsorship, streaming administration, and informational pages are also retained within the shared visual system.
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Real API with local administrator UI on port 5176 |
+| `npm run dev:preview` | Alias for the default development mode |
+| `npm run build` | Type checking and real-API production build |
+| `npm run preview` | Serve the built frontend |
+| `npm run dev:demo` | Offline sample-data mode on port 5177 |
+| `npm run build:demo` | Build the offline demo |
+| `npm run dev:backend` | Real API with account-based UI permissions |
+| `npm run build:backend` | Build the account-based mode |
+| `npm run lint` | Static analysis |
+| `npm run test:preview` | Data, H3 aggregation, and download-format tests |
+
+## Configuration
+
+The development server proxies `/api` to `https://specscape.org` by default, with TLS verification enabled.
+
+Available configuration options are documented in `.env.example`:
+
+- `VITE_API_PROXY_TARGET`: Override the backend proxy target
+- `VITE_USE_MOCK_API`: Explicitly enable sample-data mode
+- `VITE_LOCAL_ADMIN`: Enable local administrator navigation and UI
+- `VITE_RECAPTCHA_SITE_KEY`: Configure the public CAPTCHA site key
+- `VITE_MAPBOX_TOKEN`: Configure a public Mapbox token
+
+## Validation and Current Limits
+
+Type checking, the real-API build, and seven regression tests pass. Static analysis reports warnings but no errors.
+
+Browser verification includes the main navigation, sensor workflows, spectrum controls, H3 interactions, and the offline page flows. A real Greentree signal was successfully received and rendered as a power spectrum and waterfall.
+
+Subsequent connection attempts encountered data-channel timeouts, and some historical requests returned server errors or timed out. Connection reliability has not been fully validated.
+
+Real mobile H3 data remains pending backend integration. Hardware tuning, every live decoding protocol, email delivery, and administrative write operations have not received complete end-to-end validation.
+
+## Project Structure
+
+- `src/layout/` and `src/config/`: Navigation, runtime modes, and shared layout
+- `src/auth/`: Session handling and access checks
+- `src/api/`: Real API client, spatial-data loading, and demo data
+- `src/pages/`: Research, administration, account, and informational pages
+- `src/components/`: Maps, charts, decoder controls, and shared UI
+- `src/lib/`: Spectrum processing, H3 aggregation, and utility functions
+- `src/linxiang.css`: Shared visual and interaction system
+- `tests/preview.test.ts`: Regression tests
+- `docs/preview/`: Screenshots and verification artifacts
+
+See [the frontend preview guide](docs/FRONTEND_PREVIEW.md) for the branch comparison, implementation details, and validation notes.
