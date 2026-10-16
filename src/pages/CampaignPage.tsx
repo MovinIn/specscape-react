@@ -64,7 +64,11 @@ function iqTemplate(): Campaign {
  * ngModel value of an <input type="number">: '' -> null, unparsable or outside
  * min/max -> undefined (the field is invalid), otherwise the number.
  */
-function ngNumber(e: ChangeEvent<HTMLInputElement>, min?: number, max?: number): NgNumber {
+function ngNumber(
+  e: ChangeEvent<HTMLInputElement>,
+  min?: number,
+  max?: number,
+): NgNumber {
   const raw = e.target.value
   if (e.target.validity.badInput) return undefined
   if (raw === '') return null
@@ -90,22 +94,32 @@ function ngDate(ms: number, format: string): string {
   const d = new Date(ms)
   if (!Number.isFinite(d.getTime())) return String(ms)
   const parts: Record<string, number> = {
-    y: d.getFullYear(), M: d.getMonth() + 1, d: d.getDate(),
-    H: d.getHours(), m: d.getMinutes(), s: d.getSeconds(),
+    y: d.getFullYear(),
+    M: d.getMonth() + 1,
+    d: d.getDate(),
+    H: d.getHours(),
+    m: d.getMinutes(),
+    s: d.getSeconds(),
   }
-  return format.replace(/y+|M+|d+|H+|m+|s+/g, (tok) => String(parts[tok[0]]).padStart(tok.length, '0'))
+  return format.replace(/y+|M+|d+|H+|m+|s+/g, (tok) =>
+    String(parts[tok[0]]).padStart(tok.length, '0'),
+  )
 }
 
 /** AngularJS `filter:expression` with a string: case-insensitive match against any (nested) property. */
 function ngFilterMatch(item: unknown, expression: string): boolean {
-  if (expression.charAt(0) === '!') return !ngFilterMatch(item, expression.substring(1))
+  if (expression.charAt(0) === '!')
+    return !ngFilterMatch(item, expression.substring(1))
   const expected = expression.toLowerCase()
   const deep = (actual: unknown): boolean => {
     if (Array.isArray(actual)) return actual.some(deep)
     if (actual !== null && typeof actual === 'object') {
-      return Object.entries(actual).some(([k, v]) => k.charAt(0) !== '$' && deep(v))
+      return Object.entries(actual).some(
+        ([k, v]) => k.charAt(0) !== '$' && deep(v),
+      )
     }
-    if (actual === undefined || actual === null || typeof actual === 'function') return false
+    if (actual === undefined || actual === null || typeof actual === 'function')
+      return false
     return String(actual).toLowerCase().includes(expected)
   }
   return deep(item)
@@ -144,7 +158,7 @@ export default function CampaignPage() {
         setCampaigns(
           (Array.isArray(data) ? (data as ServerCampaign[]) : []).map((c) => ({
             ...c,
-            sensors: Array.from(new Set(c.sensors)),
+            sensors: Array.from(new Set(c.sensors ?? [])),
           })),
         )
       },
@@ -174,53 +188,92 @@ export default function CampaignPage() {
 
   const visibleSensors = sensors.filter((s) => ngFilterMatch(s, filterSensors))
 
-  /** New filter text: options it hides drop out of the multi-select model (as in AngularJS). */
   function changeFilter(text: string) {
-    const removed = visibleSensors.filter((s) => !ngFilterMatch(s, text)).map((s) => s.serial)
     setFilterSensors(text)
-    if (removed.length === 0) return
-    setCampaign((c) => {
-      const kept = c.sensors.filter((s) => !removed.includes(s))
-      return kept.length === c.sensors.length ? c : { ...c, sensors: kept }
-    })
   }
 
-  function setParam<K extends keyof Campaign['senseParameters']>(key: K, value: Campaign['senseParameters'][K]) {
-    setCampaign((c) => ({ ...c, senseParameters: { ...c.senseParameters, [key]: value } }))
+  function setParam<K extends keyof Campaign['senseParameters']>(
+    key: K,
+    value: Campaign['senseParameters'][K],
+  ) {
+    setCampaign((c) => ({
+      ...c,
+      senseParameters: { ...c.senseParameters, [key]: value },
+    }))
   }
 
   function addCampaign(e: FormEvent) {
     e.preventDefault()
     setErrors([])
-    if (!date) {
-      // legacy: this.date.getTime() threw inside ng-submit
-      console.error(new TypeError('Cannot read properties of ' + date + " (reading 'getTime')"))
+    if (!date || !Number.isFinite(date.getTime())) {
+      setErrors(['Choose a valid start date.'])
       return
     }
     const errs: string[] = []
+    if (
+      hour == null ||
+      minute == null ||
+      second == null ||
+      !Number.isInteger(hour) ||
+      !Number.isInteger(minute) ||
+      !Number.isInteger(second) ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59 ||
+      second < 0 ||
+      second > 59
+    )
+      errs.push('Enter a valid start time.')
+    const sp = campaign.senseParameters
+    if (
+      sp.monitorTime == null ||
+      !Number.isFinite(sp.monitorTime) ||
+      sp.monitorTime < 1 ||
+      sp.monitorTime > 300
+    )
+      errs.push('Duration must be between 1 and 300 seconds.')
+    if (
+      sp.sampRate == null ||
+      !Number.isFinite(sp.sampRate) ||
+      sp.sampRate <= 0
+    )
+      errs.push('Sampling rate must be greater than zero.')
+    if (!Number.isFinite(sp.minfreq) || sp.minfreq <= 0)
+      errs.push('Center frequency must be greater than zero.')
+    if (errs.length) {
+      setErrors(errs)
+      return
+    }
 
     //// set start and end time
-    let tmpTime = date.getTime()
-    tmpTime -= tmpTime % 86400000
-    const abs = new Date(tmpTime)
+    const abs = new Date(date.getTime())
     abs.setHours(hour as number)
     abs.setMinutes(minute as number)
     abs.setSeconds(second as number)
     const absMs = abs.getTime()
-    const sp = campaign.senseParameters
     const next: Campaign = {
       ...campaign,
       startTime: absMs - 30000,
       endTime: absMs + (sp.monitorTime as number) * 1000 + 7200000,
-      senseParameters: { ...sp, absoluteTime: absMs / 1000, maxfreq: sp.minfreq },
+      senseParameters: {
+        ...sp,
+        absoluteTime: absMs / 1000,
+        maxfreq: sp.minfreq,
+      },
     }
     setCampaign(next)
 
     //// sanity checks
-    if ((next.senseParameters.absoluteTime as number) * 1000 - new Date().getTime() < 60000) {
+    if (
+      (next.senseParameters.absoluteTime as number) * 1000 -
+        new Date().getTime() <
+      60000
+    ) {
       errs.push('Campaign must start at least 1 minute in the future')
     }
-    if ((sp.monitorTime as number) > 300) errs.push('Maximum IQ campaign length is five minutes')
+    if ((sp.monitorTime as number) > 300)
+      errs.push('Maximum IQ campaign length is five minutes')
     if (next.sensors.length < 1) errs.push('No sensor selected')
     if (errs.length > 0) {
       setErrors(errs)
@@ -232,12 +285,16 @@ export default function CampaignPage() {
     api.addCampaign(next).then(
       (c) => {
         updateCampaigns().then(() => setLoading(false))
-        setInfos([`Campaign ${(c as { id?: unknown } | undefined)?.id} added successfully`])
-        console.log(c)
+        setInfos([
+          `Campaign ${(c as { id?: unknown } | undefined)?.id} added successfully`,
+        ])
       },
       (err) => {
         setLoading(false)
-        setErrors((err as { data?: unknown } | null)?.data)
+        setErrors([
+          (err as { message?: string } | null)?.message ??
+            'Unable to create the campaign. Please try again.',
+        ])
       },
     )
   }
@@ -251,7 +308,7 @@ export default function CampaignPage() {
   const errorItems: unknown[] = Array.isArray(errors)
     ? errors
     : typeof errors === 'string'
-      ? errors.split('')
+      ? [errors]
       : []
 
   return (
@@ -301,19 +358,34 @@ export default function CampaignPage() {
                         </span>{' '}
                         <span className="campaign-list-type">
                           <small>Type:</small> <br className="hacking-br" />
-                          <strong>{c.senseParameters?.measurementType == 'IQ' ? 'IQ' : 'PSD'}</strong>
+                          <strong>
+                            {c.senseParameters?.measurementType == 'IQ'
+                              ? 'IQ'
+                              : 'PSD'}
+                          </strong>
                         </span>{' '}
                         <span className="campaign-list-state">
                           <small>State:</small> <br className="hacking-br" />
                           <strong>{ngString(c.status)}</strong>
                         </span>{' '}
                         <span className="campaign-list-start">
-                          <small>Start Time:</small> <br className="hacking-br" />
-                          <strong>{ngDate((c.startTime as number) * 1000, 'yyyy-MM-dd&nbsp;HH:mm:ss')}</strong>
+                          <small>Start Time:</small>{' '}
+                          <br className="hacking-br" />
+                          <strong>
+                            {ngDate(
+                              (c.startTime as number) * 1000,
+                              'yyyy-MM-dd HH:mm:ss',
+                            )}
+                          </strong>
                         </span>{' '}
                         <span className="campaign-list-end">
                           <small>End Time:</small> <br className="hacking-br" />
-                          <strong>{ngDate((c.endTime as number) * 1000, 'yyyy-MM-dd&nbsp;HH:mm:ss')}</strong>
+                          <strong>
+                            {ngDate(
+                              (c.endTime as number) * 1000,
+                              'yyyy-MM-dd HH:mm:ss',
+                            )}
+                          </strong>
                         </span>{' '}
                         <span className="campaign-list-sensors">
                           <small>Sensors:</small> <br className="hacking-br" />
@@ -378,7 +450,11 @@ export default function CampaignPage() {
           </div>
         ) : null}
 
-        <form className="form-horizontal" onSubmit={addCampaign} name="sensorForm">
+        <form
+          className="form-horizontal"
+          onSubmit={addCampaign}
+          name="sensorForm"
+        >
           <fieldset disabled={loading}>
             <div className="col-sm-6">
               <div className="form-group">
@@ -390,6 +466,7 @@ export default function CampaignPage() {
                     type="text"
                     className="form-control"
                     placeholder="Search Sensors"
+                    aria-label="Search campaign sensors"
                     value={filterSensors}
                     onChange={(e) => changeFilter(e.target.value)}
                   />
@@ -403,10 +480,21 @@ export default function CampaignPage() {
                       .filter((s) => campaign.sensors.includes(s.serial))
                       .map((s) => String(s.serial))}
                     onChange={(e) => {
-                      const picked = Array.from(e.target.selectedOptions, (o) => o.value)
+                      const picked = Array.from(
+                        e.target.selectedOptions,
+                        (o) => o.value,
+                      )
                       setCampaign((c) => ({
                         ...c,
-                        sensors: visibleSensors.filter((s) => picked.includes(String(s.serial))).map((s) => s.serial),
+                        sensors: [
+                          ...c.sensors.filter(
+                            (serial) =>
+                              !visibleSensors.some((s) => s.serial === serial),
+                          ),
+                          ...visibleSensors
+                            .filter((s) => picked.includes(String(s.serial)))
+                            .map((s) => s.serial),
+                        ],
                       }))
                     }}
                   >
@@ -417,14 +505,26 @@ export default function CampaignPage() {
                     ))}
                   </select>
                 </div>
-                <a
+                <button
+                  type="button"
                   className="btn btn-default btn-xs"
                   onClick={() => {
-                    setCampaign((c) => ({ ...c, sensors: sensors.map((s) => s.serial) }))
+                    setCampaign((c) => ({
+                      ...c,
+                      sensors: Array.from(
+                        new Set([
+                          ...c.sensors,
+                          ...visibleSensors.map((s) => s.serial),
+                        ]),
+                      ),
+                    }))
                   }}
                 >
-                  Select All
-                </a>
+                  Select visible
+                </button>{' '}
+                <span className="text-muted">
+                  {campaign.sensors.length} selected
+                </span>
               </div>
             </div>
             {/* col-sm-6 */}
@@ -432,8 +532,8 @@ export default function CampaignPage() {
             <div className="col-sm-6">
               <div className="col-sm-6">
                 <div className="form-group">
-                  <label className="control-label" htmlFor="name">
-                    Start Time
+                  <label className="control-label" htmlFor="esdp">
+                    Start date
                   </label>
 
                   <div className="input-group">
@@ -449,7 +549,12 @@ export default function CampaignPage() {
                       closeText="Close"
                     />
                     <span className="input-group-btn">
-                      <button type="button" className="btn btn-default" onClick={() => setDpOpen(true)}>
+                      <button
+                        type="button"
+                        className="btn btn-default"
+                        aria-label="Choose start date"
+                        onClick={() => setDpOpen(true)}
+                      >
                         <i className="glyphicon glyphicon-calendar" />
                       </button>
                     </span>
@@ -459,30 +564,57 @@ export default function CampaignPage() {
 
               <div className="col-sm-6">
                 <div className="form-group">
-                  <label className="control-label" htmlFor="name">
-                    &nbsp;
+                  <label className="control-label" htmlFor="hour">
+                    Local start time
                   </label>
 
                   <div className="input-group">
                     <input
-                      type="number" min="0" max="23" name="hour" id="hour" className="form-control"
-                      placeholder="hh" style={{ width: '4.5em' }} value={raw.hour}
+                      type="number"
+                      required
+                      aria-label="Start hour"
+                      min="0"
+                      max="23"
+                      name="hour"
+                      id="hour"
+                      className="form-control"
+                      placeholder="hh"
+                      style={{ width: '4.5em' }}
+                      value={raw.hour}
                       onChange={(e) => {
                         setRaw((r) => ({ ...r, hour: e.target.value }))
                         setHour(ngNumber(e, 0, 23))
                       }}
                     />
                     <input
-                      type="number" min="0" max="59" name="minute" id="minute" className="form-control"
-                      placeholder="mm" style={{ width: '4.5em' }} value={raw.minute}
+                      type="number"
+                      required
+                      aria-label="Start minute"
+                      min="0"
+                      max="59"
+                      name="minute"
+                      id="minute"
+                      className="form-control"
+                      placeholder="mm"
+                      style={{ width: '4.5em' }}
+                      value={raw.minute}
                       onChange={(e) => {
                         setRaw((r) => ({ ...r, minute: e.target.value }))
                         setMinute(ngNumber(e, 0, 59))
                       }}
                     />
                     <input
-                      type="number" min="0" max="59" name="second" id="second" className="form-control"
-                      placeholder="ss" style={{ width: '4.5em' }} value={raw.second}
+                      type="number"
+                      required
+                      aria-label="Start second"
+                      min="0"
+                      max="59"
+                      name="second"
+                      id="second"
+                      className="form-control"
+                      placeholder="ss"
+                      style={{ width: '4.5em' }}
+                      value={raw.second}
                       onChange={(e) => {
                         setRaw((r) => ({ ...r, second: e.target.value }))
                         setSecond(ngNumber(e, 0, 59))
@@ -494,13 +626,20 @@ export default function CampaignPage() {
 
               <div className="col-sm-12">
                 <div className="form-group">
-                  <label className="control-label" htmlFor="name">
+                  <label className="control-label" htmlFor="duration">
                     Duration (seconds)
                   </label>
                   <div className="">
                     <input
-                      id="name" name="name" type="number" placeholder="name" min="1" max="300" required
-                      className="form-control input-md" value={raw.monitorTime}
+                      id="duration"
+                      name="duration"
+                      type="number"
+                      placeholder="Seconds"
+                      min="1"
+                      max="300"
+                      required
+                      className="form-control input-md"
+                      value={raw.monitorTime}
                       onChange={(e) => {
                         setRaw((r) => ({ ...r, monitorTime: e.target.value }))
                         setParam('monitorTime', ngNumber(e, 1, 300))
@@ -530,8 +669,14 @@ export default function CampaignPage() {
                   </label>
                   <div className="">
                     <input
-                      id="samp-rate" name="samp-rate" type="number" placeholder="sampling rate" required
-                      className="form-control input-md" min="1" value={raw.sampRate}
+                      id="samp-rate"
+                      name="samp-rate"
+                      type="number"
+                      placeholder="sampling rate"
+                      required
+                      className="form-control input-md"
+                      min="1"
+                      value={raw.sampRate}
                       onChange={(e) => {
                         setRaw((r) => ({ ...r, sampRate: e.target.value }))
                         setParam('sampRate', ngNumber(e, 1))
@@ -546,14 +691,14 @@ export default function CampaignPage() {
 
           <div className="text-right">
             {loading ? <span className="text-muted">Loading...</span> : null}{' '}
-            <input type="submit" className="btn btn-primary" value="Add" disabled={loading} />
+            <input
+              type="submit"
+              className="btn btn-primary"
+              value="Schedule campaign"
+              disabled={loading}
+            />
           </div>
         </form>
-
-        <div className="alert alert-warning" style={{ marginTop: 50 }}>
-          <h4>DEBUG Info</h4>
-          {JSON.stringify(campaign)}
-        </div>
       </div>
     </div>
   )

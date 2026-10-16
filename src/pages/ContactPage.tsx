@@ -1,3 +1,4 @@
+import { isPreview } from '../config/navigation'
 import { useState, type FormEvent } from 'react'
 import { api } from '../api/client'
 import { Recaptcha, resetRecaptcha } from '../components/Recaptcha'
@@ -27,17 +28,22 @@ export default function ContactPage() {
         message,
         'g-recaptcha-response': captcha,
       })
-      show('Thanks for your inquiry. We will answer as soon as possible!', 'info')
+      show(
+        isPreview
+          ? 'Inquiry saved in this local workspace.'
+          : 'Thanks for your inquiry. We will answer as soon as possible!',
+        'info',
+      )
       setName('')
       setEmail('')
       setSubject('')
       setMessage('')
       resetRecaptcha()
-      setCaptcha(null)
+      if (!isPreview) setCaptcha(null)
     } catch {
       show('Something went wrong. Please try again.', 'error')
       resetRecaptcha()
-      setCaptcha(null)
+      if (!isPreview) setCaptcha(null)
     } finally {
       setIsWorking(false)
     }
@@ -53,8 +59,8 @@ export default function ContactPage() {
 
           <p>
             If you have any questions, improvements, suggestions or general
-            remarks, feel free to contact us using the form below. You need
-            to fill out all the fields.
+            remarks, feel free to contact us using the form below. You need to
+            fill out all the fields.
           </p>
 
           <form className="form-horizontal" onSubmit={submit}>
@@ -133,7 +139,7 @@ export default function ContactPage() {
             <fieldset disabled={isWorking}>
               <div className="form-group">
                 <label className="col-md-4 control-label" htmlFor="captcha">
-                  Captcha
+                  {isPreview ? 'Preview' : 'Captcha'}
                 </label>
                 <div className="col-md-4">
                   <Recaptcha onChange={setCaptcha} hideLabel />
@@ -147,7 +153,7 @@ export default function ContactPage() {
                   className="btn btn-primary validate"
                   disabled={isWorking}
                 >
-                  Send Email
+                  {isPreview ? 'Save inquiry' : 'Send Email'}
                 </button>
                 {isWorking ? (
                   <span>

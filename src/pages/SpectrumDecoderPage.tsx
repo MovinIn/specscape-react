@@ -1,3 +1,5 @@
+import { sampleAudio } from '../lib/previewDownloads'
+import { isPreview } from '../config/navigation'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
@@ -6,9 +8,19 @@ import { useAuth } from '../auth/AuthContext'
 import { EsLeafletMap, type MapSensor } from '../components/EsLeafletMap'
 import { RzSlider } from '../components/RzSlider'
 import { EsSelFreq } from '../components/decoder/EsSelFreq'
-import { Flightmap, type AircraftState, type FlightmapHandle } from '../components/decoder/Flightmap'
-import { LivePowerLevels, type LivePowerLevelsHandle } from '../components/decoder/LivePowerLevels'
-import { LiveWaterfall, type LiveWaterfallHandle } from '../components/decoder/LiveWaterfall'
+import {
+  Flightmap,
+  type AircraftState,
+  type FlightmapHandle,
+} from '../components/decoder/Flightmap'
+import {
+  LivePowerLevels,
+  type LivePowerLevelsHandle,
+} from '../components/decoder/LivePowerLevels'
+import {
+  LiveWaterfall,
+  type LiveWaterfallHandle,
+} from '../components/decoder/LiveWaterfall'
 import { printHzUnit } from '../lib/spectrum'
 import { decodeData, encodeCmd, type PsdPayload } from '../streaming/deser'
 import { Signaling, type SensorStatusMap } from '../streaming/Signaling'
@@ -17,7 +29,8 @@ import { WebRTCConnection } from '../streaming/WebRTCConnection'
 // Most decoders use this sample rate; WiFi needs 20 MS/s.
 const DEFAULT_SAMPLE_RATE = 2400000
 
-type TabKey = 'fm' | 'am' | 'adsb' | 'ais' | 'acars' | 'lte' | 'iot' | 'lora' | 'wifi'
+type TabKey =
+  'fm' | 'am' | 'adsb' | 'ais' | 'acars' | 'lte' | 'iot' | 'lora' | 'wifi'
 
 const TABS: { key: TabKey; heading: string }[] = [
   { key: 'fm', heading: 'FM Radio' },
@@ -34,26 +47,114 @@ const TABS: { key: TabKey; heading: string }[] = [
 /** streaming.js changeTab() settings per decoder tab. */
 const TAB_SETTINGS: Record<
   TabKey,
-  { controlsEnabled: boolean; decoder: number; defaultUnit: string; freq: number; fs: number; volume: boolean }
+  {
+    controlsEnabled: boolean
+    decoder: number
+    defaultUnit: string
+    freq: number
+    fs: number
+    volume: boolean
+  }
 > = {
-  fm: { controlsEnabled: true, decoder: 1, defaultUnit: '1000000', freq: 90500000, fs: DEFAULT_SAMPLE_RATE, volume: true },
-  am: { controlsEnabled: true, decoder: 2, defaultUnit: '1000', freq: 970000, fs: DEFAULT_SAMPLE_RATE, volume: true },
-  adsb: { controlsEnabled: false, decoder: 3, defaultUnit: '1000000', freq: 1090000000, fs: DEFAULT_SAMPLE_RATE, volume: false },
-  ais: { controlsEnabled: false, decoder: 4, defaultUnit: '1000000', freq: 162000000, fs: DEFAULT_SAMPLE_RATE, volume: false },
-  acars: { controlsEnabled: false, decoder: 5, defaultUnit: '1000000', freq: 131750000, fs: DEFAULT_SAMPLE_RATE, volume: false },
-  lte: { controlsEnabled: true, decoder: 6, defaultUnit: '1000000', freq: 806000000, fs: DEFAULT_SAMPLE_RATE, volume: false },
-  iot: { controlsEnabled: true, decoder: 7, defaultUnit: '1000000', freq: 433920000, fs: DEFAULT_SAMPLE_RATE, volume: false },
-  lora: { controlsEnabled: true, decoder: 8, defaultUnit: '1000000', freq: 917000000, fs: DEFAULT_SAMPLE_RATE, volume: false },
-  wifi: { controlsEnabled: true, decoder: 9, defaultUnit: '1000000', freq: 2412000000, fs: 20000000, volume: false },
+  fm: {
+    controlsEnabled: true,
+    decoder: 1,
+    defaultUnit: '1000000',
+    freq: 90500000,
+    fs: DEFAULT_SAMPLE_RATE,
+    volume: true,
+  },
+  am: {
+    controlsEnabled: true,
+    decoder: 2,
+    defaultUnit: '1000',
+    freq: 970000,
+    fs: DEFAULT_SAMPLE_RATE,
+    volume: true,
+  },
+  adsb: {
+    controlsEnabled: false,
+    decoder: 3,
+    defaultUnit: '1000000',
+    freq: 1090000000,
+    fs: DEFAULT_SAMPLE_RATE,
+    volume: false,
+  },
+  ais: {
+    controlsEnabled: false,
+    decoder: 4,
+    defaultUnit: '1000000',
+    freq: 162000000,
+    fs: DEFAULT_SAMPLE_RATE,
+    volume: false,
+  },
+  acars: {
+    controlsEnabled: false,
+    decoder: 5,
+    defaultUnit: '1000000',
+    freq: 131750000,
+    fs: DEFAULT_SAMPLE_RATE,
+    volume: false,
+  },
+  lte: {
+    controlsEnabled: true,
+    decoder: 6,
+    defaultUnit: '1000000',
+    freq: 806000000,
+    fs: DEFAULT_SAMPLE_RATE,
+    volume: false,
+  },
+  iot: {
+    controlsEnabled: true,
+    decoder: 7,
+    defaultUnit: '1000000',
+    freq: 433920000,
+    fs: DEFAULT_SAMPLE_RATE,
+    volume: false,
+  },
+  lora: {
+    controlsEnabled: true,
+    decoder: 8,
+    defaultUnit: '1000000',
+    freq: 917000000,
+    fs: DEFAULT_SAMPLE_RATE,
+    volume: false,
+  },
+  wifi: {
+    controlsEnabled: true,
+    decoder: 9,
+    defaultUnit: '1000000',
+    freq: 2412000000,
+    fs: 20000000,
+    volume: false,
+  },
 }
 
 /** FM/AM decoder gain from the 0–10 volume slider (streaming.js volume watch). */
 const volumeGain = (v: number) => (v === 0 ? 0 : 12 * Math.exp(0.69077 * v))
 
-type AcarsMsg = { timestamp?: number; tail?: string; flight?: string; channel?: number; freq?: number; level?: number; text?: string }
+type AcarsMsg = {
+  timestamp?: number
+  tail?: string
+  flight?: string
+  channel?: number
+  freq?: number
+  level?: number
+  text?: string
+}
 type LteCell = Record<string, string | number>
 type TextMsg = { id: number; time?: number; payload: unknown }
-type WifiMsg = { id: number; time?: number; payload: { bssid?: string; essid?: string; channel?: number; name?: string; signal?: number } }
+type WifiMsg = {
+  id: number
+  time?: number
+  payload: {
+    bssid?: string
+    essid?: string
+    channel?: number
+    name?: string
+    signal?: number
+  }
+}
 
 /** AngularJS `date:'medium'`, e.g. "Sep 27, 2026 5:34:20 PM". */
 function dateMedium(ms: number): string {
@@ -101,8 +202,12 @@ export default function SpectrumDecoderPage() {
   // Stable ref so closures created at mount (e.g. onConnected) can call connectToSensor.
   const connectToSensorRef = useRef<(id: string | number) => void>(() => {})
 
-  const [signalingStatus, setSignalingStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
-  const [webrtcStatus, setWebrtcStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
+  const [signalingStatus, setSignalingStatus] = useState<
+    'connecting' | 'connected' | 'disconnected'
+  >('connecting')
+  const [webrtcStatus, setWebrtcStatus] = useState<
+    'disconnected' | 'connecting' | 'connected'
+  >('disconnected')
   const [sensorInfo, setSensorInfo] = useState<Record<string, Sensor>>({})
   const [sensorStates, setSensorStates] = useState<SensorStatusMap>({})
   const [selectedSensor, setSelectedSensor] = useState<string | null>(null)
@@ -156,7 +261,11 @@ export default function SpectrumDecoderPage() {
         fc: c.selectedFreq,
       }
       rtc.send(encodeCmd(cmd))
-      signalingRef.current?.send({ fn: 'clientEvent', sensorId: rtc.sensorId, data: cmd })
+      signalingRef.current?.send({
+        fn: 'clientEvent',
+        sensorId: rtc.sensorId,
+        data: cmd,
+      })
     }, 10)
   }
 
@@ -215,7 +324,10 @@ export default function SpectrumDecoderPage() {
             setLteMsgs((m) => [x as TextMsg, ...m].slice(0, 15))
             break
           case 7:
-            setLteResults((r) => [...r, ...((x.payload as { Cells?: LteCell[] }).Cells ?? [])])
+            setLteResults((r) => [
+              ...r,
+              ...((x.payload as { Cells?: LteCell[] }).Cells ?? []),
+            ])
             break
           case 8:
             setIotMsgs((m) => [x as TextMsg, ...m].slice(0, 100))
@@ -235,14 +347,34 @@ export default function SpectrumDecoderPage() {
   useEffect(() => {
     let cancelled = false
     let authRetries = 0
+    let previewTimer: number | undefined
 
     ;(async () => {
       try {
         const list = await api.getSensors()
         if (cancelled) return
         const info: Record<string, Sensor> = {}
-        for (const s of list ?? []) if (s.serial != null) info[String(s.serial)] = s
+        for (const s of list ?? [])
+          if (s.serial != null) info[String(s.serial)] = s
         setSensorInfo(info)
+        if (isPreview) {
+          setSensorStates(
+            Object.fromEntries(
+              (list ?? [])
+                .filter((sensor) => sensor.serial != null)
+                .map((sensor) => [String(sensor.serial), 'ready']),
+            ),
+          )
+          setSignalingStatus('connected')
+          const serial =
+            autoConnectSerial.current ??
+            (list?.[0]?.serial != null ? String(list[0].serial) : null)
+          if (serial)
+            previewTimer = window.setTimeout(() => {
+              if (!cancelled) connectToSensorRef.current(serial)
+            }, 150)
+          return
+        }
       } catch {
         /* the map simply stays empty */
       }
@@ -251,16 +383,22 @@ export default function SpectrumDecoderPage() {
       const signaling = new Signaling(jwtRef.current ?? '', {
         onAuthenticationFailed: () => {
           if (++authRetries > 3) {
-            if (authRetries === 4) console.error('Maximum auth retries reached, giving up')
+            if (authRetries === 4)
+              console.error('Maximum auth retries reached, giving up')
             return
           }
-          console.warn(`Authentication failed, fetching token and retrying (${authRetries}/3)`)
+          console.warn(
+            `Authentication failed, fetching token and retrying (${authRetries}/3)`,
+          )
           void refreshRef.current().then((t) => signaling.authenticate(t ?? ''))
         },
         onSensors: (s) => setSensorStates({ ...s }),
         onSensorStatus: (msg) => {
           if (msg.sensorId == null) return
-          setSensorStates((prev) => ({ ...prev, [String(msg.sensorId)]: String(msg.status) }))
+          setSensorStates((prev) => ({
+            ...prev,
+            [String(msg.sensorId)]: String(msg.status),
+          }))
         },
         onConnected: () => {
           setSignalingStatus('connected')
@@ -302,9 +440,18 @@ export default function SpectrumDecoderPage() {
         },
         onDataChannelClosed: () => setWebrtcStatus('disconnected'),
         onError: (err) => {
-          const e = err as { errorText?: string; error?: { code?: number }; errorCode?: number } | null
+          const e = err as {
+            errorText?: string
+            error?: { code?: number }
+            errorCode?: number
+          } | null
           // ignore DNS lookup errors/warnings
-          if (e && (e.errorText === 'TURN host lookup received error.' || e.error?.code === 0 || e.errorCode === 701)) {
+          if (
+            e &&
+            (e.errorText === 'TURN host lookup received error.' ||
+              e.error?.code === 0 ||
+              e.errorCode === 701)
+          ) {
             return
           }
           setError('Error in sensor connection')
@@ -318,7 +465,8 @@ export default function SpectrumDecoderPage() {
       try {
         const cfg = await api.getSignalingWssUri()
         if (cancelled) return
-        const uri = (cfg as { wssUri?: string } | null)?.wssUri ?? null
+        const uri =
+          (cfg as { wssUri?: string } | null)?.wssUri ?? cfg.uri ?? null
         wssUriRef.current = uri
         if (uri) await signaling.connect(uri)
         else setSignalingStatus('disconnected')
@@ -337,6 +485,7 @@ export default function SpectrumDecoderPage() {
       cancelled = true
       window.removeEventListener('beforeunload', onUnload)
       window.clearTimeout(retuneTimer.current)
+      window.clearTimeout(previewTimer)
       onUnload()
       rtcRef.current = null
       signalingRef.current = null
@@ -344,18 +493,198 @@ export default function SpectrumDecoderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Local transport simulator: the normal signaling/WebRTC implementation is unchanged.
+  useEffect(() => {
+    if (!isPreview || !selectedSensor || webrtcStatus !== 'connected') return
+    let frame = 0
+    const tick = () => {
+      const config = cfgRef.current
+      const stamp = Date.now()
+      const data = Array.from(
+        { length: 384 },
+        (_, index) =>
+          -43 +
+          (config.antennaGain - 44) / 10 +
+          Math.sin(index * 12.4 + frame / 5) * 2 +
+          25 * Math.exp(-Math.pow((index - 175) / 22, 2)) +
+          16 * Math.exp(-Math.pow((index - 290) / 9, 2)),
+      )
+      onPsd({
+        minFreq: config.selectedFreq - config.sampleRate / 2,
+        maxFreq: config.selectedFreq + config.sampleRate / 2,
+        dataLength: data.length,
+        data,
+      })
+      const sensor = sensorInfo[selectedSensor]
+      const lat = Number(
+        sensor?.position?.latitude ?? sensor?.latitude ?? 47.3769,
+      )
+      const lon = Number(
+        sensor?.position?.longitude ?? sensor?.longitude ?? 8.5417,
+      )
+      if (activeTab === 'adsb')
+        adsbMapRef.current?.acState({
+          icao24: 'PREV01',
+          flight: 'SAMPLE01',
+          now: stamp / 1000,
+          lat: lat + 0.03 * Math.sin(frame / 60),
+          lon: lon + 0.05 * Math.cos(frame / 60),
+          altitude: 28000,
+          speed: 410,
+          track: frame % 360,
+        })
+      if (activeTab === 'ais')
+        aisMapRef.current?.aisState({
+          mmsi: '999000001',
+          name: 'SAMPLE VESSEL',
+          lat: lat + 0.01 * Math.sin(frame / 120),
+          lon: lon + 0.02 * Math.cos(frame / 120),
+          heading: frame % 360,
+          speed: 12,
+        })
+      if (frame % 10 === 0) {
+        if (activeTab === 'acars')
+          setAcarsMsgs((messages) =>
+            [
+              {
+                timestamp: stamp / 1000,
+                tail: 'SAMPLE-01',
+                flight: 'PREVIEW',
+                channel: 1,
+                freq: 131.75,
+                level: -24,
+                text: 'Illustrative ACARS telemetry frame ' + frame,
+              },
+              ...messages,
+            ].slice(0, 20),
+          )
+        if (activeTab === 'lte') {
+          setLteResults([
+            {
+              CID: 142,
+              NumberAntennaPorts: 2,
+              CarrierFrequency: config.selectedFreq,
+              FrequencyOffsetHz: 42,
+              RxPowerdB: -28,
+              CPType: 'Normal',
+              nRB: 50,
+              PHICHDuration: 'Normal',
+              PHICHResource: 'One',
+              CrystalCorrectionFactor: 1,
+            },
+          ])
+          setLteMsgs((messages) =>
+            [
+              {
+                id: frame,
+                time: stamp,
+                payload: 'Sample LTE cell synchronized',
+              },
+              ...messages,
+            ].slice(0, 15),
+          )
+        }
+        if (activeTab === 'iot')
+          setIotMsgs((messages) =>
+            [
+              {
+                id: frame,
+                time: stamp,
+                payload: {
+                  device: 'sample-weather',
+                  temperature: 21.4 + Math.sin(frame / 10),
+                  humidity: 48,
+                },
+              },
+              ...messages,
+            ].slice(0, 20),
+          )
+        if (activeTab === 'lora')
+          setLoraMsgs((messages) =>
+            [
+              {
+                id: frame,
+                time: stamp,
+                payload: {
+                  device: 'sample-node-01',
+                  spreadingFactor: 7,
+                  rssi: -83,
+                  sequence: frame,
+                },
+              },
+              ...messages,
+            ].slice(0, 20),
+          )
+        if (activeTab === 'wifi')
+          setWifiMsgs([
+            {
+              id: frame,
+              time: stamp,
+              payload: {
+                bssid: '02:00:00:00:00:01',
+                essid: 'SpecScape Preview',
+                channel: 1,
+                name: 'Sample access point',
+                signal: -32,
+              },
+            },
+          ])
+      }
+      frame++
+    }
+    tick()
+    const timer = window.setInterval(tick, 250)
+    return () => window.clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSensor, activeTab, webrtcStatus, sensorInfo])
+
+  useEffect(() => {
+    if (
+      !isPreview ||
+      webrtcStatus !== 'connected' ||
+      !['fm', 'am'].includes(activeTab)
+    )
+      return
+    const audio = audioRef.current
+    if (!audio) return
+    const url = URL.createObjectURL(
+      new Blob([sampleAudio() as BlobPart], { type: 'audio/wav' }),
+    )
+    audio.src = url
+    audio.loop = true
+    return () => {
+      audio.pause()
+      audio.removeAttribute('src')
+      audio.load()
+      URL.revokeObjectURL(url)
+    }
+  }, [webrtcStatus, activeTab])
+  useEffect(() => {
+    if (isPreview && audioRef.current)
+      audioRef.current.volume = volumeSliderVal / 10
+  }, [volumeSliderVal])
+
   function connectToSignalingServer() {
+    if (isPreview) {
+      setSignalingStatus('connected')
+      return
+    }
     const uri = wssUriRef.current
     if (uri && signalingRef.current) {
       setSignalingStatus('connecting')
-      void signalingRef.current.connect(uri).catch(() => setSignalingStatus('disconnected'))
+      void signalingRef.current
+        .connect(uri)
+        .catch(() => setSignalingStatus('disconnected'))
     }
   }
 
   // joinSensorInfo(): the sensor catalog annotated with live rtc status
   const joinedSensorInfo: MapSensor[] = useMemo(
     () =>
-      Object.values(sensorInfo).map((s) => ({ ...s, rtcStatus: sensorStates[String(s.serial)] })),
+      Object.values(sensorInfo).map((s) => ({
+        ...s,
+        rtcStatus: sensorStates[String(s.serial)],
+      })),
     [sensorInfo, sensorStates],
   )
   const signalingSensors = Object.keys(sensorStates)
@@ -370,7 +699,8 @@ export default function SpectrumDecoderPage() {
     setSelectedSensor(id)
     setWebrtcStatus('connecting')
     rtcRef.current?.setAudioPlayer(audioRef.current)
-    rtcRef.current?.connectToSensor(id)
+    if (isPreview) setWebrtcStatus('connected')
+    else rtcRef.current?.connectToSensor(id)
     const si = joinedSensorInfo.find((s) => String(s.serial) === id)
     if (si?.position?.latitude != null && si.position.longitude != null) {
       setPanCenter([si.position.latitude, si.position.longitude])
@@ -380,12 +710,18 @@ export default function SpectrumDecoderPage() {
   connectToSensorRef.current = connectToSensor
 
   function connectToSensorName(name: string) {
-    const serials = joinedSensorInfo.filter((i) => i.name === name).map((i) => i.serial)
+    const serials = joinedSensorInfo
+      .filter((i) => i.name === name)
+      .map((i) => i.serial)
     if (serials.length === 0 || serials[0] == null) return
     connectToSensor(serials[0])
   }
 
   function disconnect() {
+    if (isPreview) {
+      setWebrtcStatus('disconnected')
+      return
+    }
     rtcRef.current?.closeDataChannel()
   }
 
@@ -398,7 +734,10 @@ export default function SpectrumDecoderPage() {
     if (searchValue.length < 2) return []
     const q = searchValue.toLowerCase()
     return joinedSensorInfo
-      .filter((s) => (s.name ?? '').toLowerCase().includes(q) && s.rtcStatus === 'ready')
+      .filter(
+        (s) =>
+          (s.name ?? '').toLowerCase().includes(q) && s.rtcStatus === 'ready',
+      )
       .slice(0, 15)
   }, [searchValue, joinedSensorInfo])
 
@@ -430,16 +769,30 @@ export default function SpectrumDecoderPage() {
     <>
       <div className="container-fluid">
         <h1>Spectrum Decoder</h1>
+        {isPreview && (
+          <div className="lx-local-notice">
+            <i className="fa-solid fa-flask" aria-hidden="true" /> Local signal
+            simulator · tune a sensor and explore all nine decoders.
+          </div>
+        )}
 
         <div id="sensor-status" className="panel panel-default">
           <div className="panel-heading">
             {webrtcStatus === 'connected' ? (
-              <button className="btn btn-danger btn-xs" type="button" onClick={disconnect}>
+              <button
+                className="btn btn-danger btn-xs"
+                type="button"
+                onClick={disconnect}
+              >
                 Disconnect
               </button>
             ) : null}
-            {webrtcStatus === 'disconnected' ? <span>Select a sensor to connect to</span> : null}
-            {webrtcStatus === 'connecting' ? <span>Connecting to {nameOf(selectedSensor) || '[]'}...</span> : null}
+            {webrtcStatus === 'disconnected' ? (
+              <span>Select a sensor to connect to</span>
+            ) : null}
+            {webrtcStatus === 'connecting' ? (
+              <span>Connecting to {nameOf(selectedSensor) || '[]'}...</span>
+            ) : null}
             {webrtcStatus === 'connected' ? (
               <span>
                 {' '}
@@ -448,7 +801,12 @@ export default function SpectrumDecoderPage() {
             ) : null}
           </div>
 
-          <div className="panel-body" style={{ display: webrtcStatus !== 'connected' ? undefined : 'none' }}>
+          <div
+            className="panel-body"
+            style={{
+              display: webrtcStatus !== 'connected' ? undefined : 'none',
+            }}
+          >
             {signalingSensors.length > 0 ? (
               <form
                 className="form-inline streaming-form"
@@ -473,12 +831,20 @@ export default function SpectrumDecoderPage() {
                       setActiveIdx(0)
                     }}
                     onKeyDown={onSearchKey}
-                    onBlur={() => window.setTimeout(() => setTypeaheadOpen(false), 150)}
+                    onBlur={() =>
+                      window.setTimeout(() => setTypeaheadOpen(false), 150)
+                    }
                   />
                   {typeaheadOpen && matches.length > 0 ? (
-                    <ul className="dropdown-menu" style={{ display: 'block', top: '100%', left: 0 }}>
+                    <ul
+                      className="dropdown-menu"
+                      style={{ display: 'block', top: '100%', left: 0 }}
+                    >
                       {matches.map((s, i) => (
-                        <li key={String(s.serial)} className={i === activeIdx ? 'active' : undefined}>
+                        <li
+                          key={String(s.serial)}
+                          className={i === activeIdx ? 'active' : undefined}
+                        >
                           <a
                             style={{ cursor: 'pointer' }}
                             onMouseEnter={() => setActiveIdx(i)}
@@ -496,7 +862,11 @@ export default function SpectrumDecoderPage() {
                   ) : null}
                 </div>{' '}
                 <div className="form-group">
-                  <button type="submit" className="btn btn-success" disabled={webrtcStatus === 'connecting'}>
+                  <button
+                    type="submit"
+                    className="btn btn-success"
+                    disabled={webrtcStatus === 'connecting'}
+                  >
                     Connect
                   </button>
                 </div>
@@ -509,7 +879,11 @@ export default function SpectrumDecoderPage() {
               </div>
             ) : null}
 
-            <div style={{ display: webrtcStatus === 'disconnected' ? undefined : 'none' }}>
+            <div
+              style={{
+                display: webrtcStatus === 'disconnected' ? undefined : 'none',
+              }}
+            >
               <EsLeafletMap
                 sensors={joinedSensorInfo}
                 rtc
@@ -533,7 +907,10 @@ export default function SpectrumDecoderPage() {
 
         <div
           id="decoding-controls"
-          style={{ position: 'relative', display: webrtcStatus === 'connected' ? undefined : 'none' }}
+          style={{
+            position: 'relative',
+            display: webrtcStatus === 'connected' ? undefined : 'none',
+          }}
         >
           <LivePowerLevels
             ref={powerRef}
@@ -545,6 +922,7 @@ export default function SpectrumDecoderPage() {
 
           <LiveWaterfall
             ref={waterfallRef}
+            seedPreviewHistory={isPreview}
             enableInteraction={controlsEnabled}
             showSlider
             hideTooltip={false}
@@ -557,6 +935,8 @@ export default function SpectrumDecoderPage() {
             <div className="col-sm-2">Center Frequency:</div>
             <div className="col-sm-7" style={{ margin: -20 }}>
               <RzSlider
+                ariaLabel="Center frequency"
+                format={(value) => printHzUnit(value)}
                 value={selectedFreq}
                 floor={0}
                 ceil={6e9}
@@ -578,6 +958,7 @@ export default function SpectrumDecoderPage() {
             <div className="col-sm-2">Antenna Gain:</div>
             <div className="col-sm-7" style={{ margin: -20 }}>
               <RzSlider
+                ariaLabel="Antenna gain"
                 value={antennaGain}
                 floor={0}
                 ceil={49}
@@ -589,15 +970,39 @@ export default function SpectrumDecoderPage() {
               />
             </div>
             <div className="col-sm-3">
-              {antennaGain !== 0 ? <input type="number" value={antennaGain} min={0} max={49} readOnly /> : <span>Auto</span>}
+              {antennaGain !== 0 ? (
+                <input
+                  type="number"
+                  value={antennaGain}
+                  min={0}
+                  max={49}
+                  readOnly
+                />
+              ) : (
+                <span>Auto</span>
+              )}
             </div>
           </div>
-          <audio ref={audioRef} id="audio" autoPlay controls className="hidden" />
+          <audio
+            ref={audioRef}
+            id="audio"
+            autoPlay={!isPreview}
+            controls
+            aria-label="Sample decoder audio"
+            className={
+              isPreview && ['fm', 'am'].includes(activeTab)
+                ? 'lx-preview-audio'
+                : 'hidden'
+            }
+          />
 
           <div style={{ marginTop: 20 }}>
             <ul className="nav nav-tabs">
               {TABS.map((t) => (
-                <li key={t.key} className={`uib-tab nav-item${activeTab === t.key ? ' active' : ''}`}>
+                <li
+                  key={t.key}
+                  className={`uib-tab nav-item${activeTab === t.key ? ' active' : ''}`}
+                >
                   <a
                     href="#"
                     className="nav-link"
@@ -613,13 +1018,17 @@ export default function SpectrumDecoderPage() {
             </ul>
             <div className="tab-content">
               {(['fm', 'am'] as const).map((k) => (
-                <div key={k} className={`tab-pane${activeTab === k ? ' active' : ''}`}>
+                <div
+                  key={k}
+                  className={`tab-pane${activeTab === k ? ' active' : ''}`}
+                >
                   <div className="row">
                     <div className="col-sm-1" style={{ marginTop: 25 }}>
                       Volume:
                     </div>
                     <div className="col-sm-11">
                       <RzSlider
+                        ariaLabel="Decoder volume"
                         value={volumeSliderVal}
                         floor={0}
                         ceil={10}
@@ -636,20 +1045,43 @@ export default function SpectrumDecoderPage() {
                 </div>
               ))}
 
-              <div className={`tab-pane${activeTab === 'adsb' ? ' active' : ''}`}>
-                <Flightmap ref={adsbMapRef} aircraft center={panCenter} refresh={activeTab} />
+              <div
+                className={`tab-pane${activeTab === 'adsb' ? ' active' : ''}`}
+              >
+                <Flightmap
+                  ref={adsbMapRef}
+                  aircraft
+                  center={panCenter}
+                  refresh={activeTab}
+                />
               </div>
-              <div className={`tab-pane${activeTab === 'ais' ? ' active' : ''}`}>
-                <Flightmap ref={aisMapRef} ships center={panCenter} refresh={activeTab} />
+              <div
+                className={`tab-pane${activeTab === 'ais' ? ' active' : ''}`}
+              >
+                <Flightmap
+                  ref={aisMapRef}
+                  ships
+                  center={panCenter}
+                  refresh={activeTab}
+                />
               </div>
 
-              <div className={`tab-pane${activeTab === 'acars' ? ' active' : ''}`}>
+              <div
+                className={`tab-pane${activeTab === 'acars' ? ' active' : ''}`}
+              >
                 {acarsMsgs.map((m, i) => (
-                  <table key={i} className="table table-condensed" style={{ border: '1px solid #ccc' }}>
+                  <table
+                    key={i}
+                    className="table table-condensed"
+                    style={{ border: '1px solid #ccc' }}
+                  >
                     <tbody>
                       <tr className="text-muted">
                         <td>
-                          <strong>Time:</strong> {m.timestamp != null ? dateMedium(m.timestamp * 1000) : ''}
+                          <strong>Time:</strong>{' '}
+                          {m.timestamp != null
+                            ? dateMedium(m.timestamp * 1000)
+                            : ''}
                         </td>
                         <td>
                           <strong>Registration: </strong> {m.tail}
@@ -663,7 +1095,8 @@ export default function SpectrumDecoderPage() {
                           <strong>Channel: </strong> {m.channel}
                         </td>
                         <td>
-                          <strong>Frequency: </strong> {printHzUnit((m.freq ?? 0) * 1000000)}
+                          <strong>Frequency: </strong>{' '}
+                          {printHzUnit((m.freq ?? 0) * 1000000)}
                         </td>
                         <td>
                           <strong>Level: </strong> {m.level}dB
@@ -679,9 +1112,14 @@ export default function SpectrumDecoderPage() {
                 ))}
               </div>
 
-              <div className={`tab-pane${activeTab === 'lte' ? ' active' : ''}`}>
+              <div
+                className={`tab-pane${activeTab === 'lte' ? ' active' : ''}`}
+              >
                 {lteResults.length > 0 ? (
-                  <table className="table table-condensed" style={{ border: '1px solid #ccc' }}>
+                  <table
+                    className="table table-condensed"
+                    style={{ border: '1px solid #ccc' }}
+                  >
                     <thead>
                       <tr>
                         <th>ID</th>
@@ -701,7 +1139,9 @@ export default function SpectrumDecoderPage() {
                         <tr key={i}>
                           <td>{m.CID}</td>
                           <td>{m.NumberAntennaPorts}</td>
-                          <td>{printHzUnit(Number(m.CarrierFrequency) || 0)}</td>
+                          <td>
+                            {printHzUnit(Number(m.CarrierFrequency) || 0)}
+                          </td>
                           <td>{m.FrequencyOffsetHz}</td>
                           <td>{m.RxPowerdB}dB</td>
                           <td>{m.CPType}</td>
@@ -718,21 +1158,33 @@ export default function SpectrumDecoderPage() {
                   <ul className="list-unstyled">
                     {lteMsgs.map((m, i) => (
                       <li key={i}>
-                        <span className="text-muted">{m.time != null ? dateMedium(m.time) : ''}</span>{' '}
-                        <span style={{ width: 20 }} /> <span className="text-info">{String(m.payload)}</span>
+                        <span className="text-muted">
+                          {m.time != null ? dateMedium(m.time) : ''}
+                        </span>{' '}
+                        <span style={{ width: 20 }} />{' '}
+                        <span className="text-info">{String(m.payload)}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               </div>
 
-              {([
-                ['iot', iotMsgs],
-                ['lora', loraMsgs],
-              ] as const).map(([k, msgs]) => (
-                <div key={k} className={`tab-pane${activeTab === k ? ' active' : ''}`}>
+              {(
+                [
+                  ['iot', iotMsgs],
+                  ['lora', loraMsgs],
+                ] as const
+              ).map(([k, msgs]) => (
+                <div
+                  key={k}
+                  className={`tab-pane${activeTab === k ? ' active' : ''}`}
+                >
                   {msgs.map((m, i) => (
-                    <table key={i} className="table table-condensed" style={{ border: '1px solid #ccc' }}>
+                    <table
+                      key={i}
+                      className="table table-condensed"
+                      style={{ border: '1px solid #ccc' }}
+                    >
                       <tbody>
                         <tr className="text-muted">
                           <td colSpan={3}>
@@ -745,9 +1197,14 @@ export default function SpectrumDecoderPage() {
                 </div>
               ))}
 
-              <div className={`tab-pane${activeTab === 'wifi' ? ' active' : ''}`}>
+              <div
+                className={`tab-pane${activeTab === 'wifi' ? ' active' : ''}`}
+              >
                 {wifiMsgs.length > 0 ? (
-                  <table className="table table-condensed" style={{ border: '1px solid #ccc' }}>
+                  <table
+                    className="table table-condensed"
+                    style={{ border: '1px solid #ccc' }}
+                  >
                     <thead>
                       <tr>
                         <th>BSSID</th>
@@ -787,10 +1244,15 @@ export default function SpectrumDecoderPage() {
             <div>
               <h2 className="text-danger">Disconnected</h2>
               <p>
-                The control connection to the backend is unavailable. There might be an error on our side. You can
-                retry, refresh the page or come back later.
+                The control connection to the backend is unavailable. There
+                might be an error on our side. You can retry, refresh the page
+                or come back later.
               </p>
-              <button className="btn btn-warning" type="button" onClick={connectToSignalingServer}>
+              <button
+                className="btn btn-warning"
+                type="button"
+                onClick={connectToSignalingServer}
+              >
                 Retry
               </button>
             </div>

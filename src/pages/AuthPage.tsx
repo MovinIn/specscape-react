@@ -1,3 +1,4 @@
+import { isPreview } from '../config/navigation'
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
@@ -30,6 +31,33 @@ export default function AuthPage() {
       window.location.assign('/')
     }, 2000)
   }
+
+  if (isPreview)
+    return (
+      <div className="lx-access-card">
+        <div className="lx-access-icon">
+          <i className="fa-solid fa-shield-halved" aria-hidden="true" />
+        </div>
+        <p className="lx-eyebrow">YOUR WORKSPACE IS READY</p>
+        <h1>
+          Full access.
+          <br />
+          Zero friction.
+        </h1>
+        <p>
+          You are exploring SpecScape as a local administrator. All research
+          tools, sensor settings and administration pages are available.
+        </p>
+        <div>
+          <Link to="/" className="lx-button lx-button-primary">
+            Open workspace <span aria-hidden="true">↗</span>
+          </Link>
+          <Link to="/account/edit" className="lx-text-link">
+            Edit profile <span aria-hidden="true">→</span>
+          </Link>
+        </div>
+      </div>
+    )
 
   if (authenticated) {
     return (

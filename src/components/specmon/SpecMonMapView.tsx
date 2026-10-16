@@ -1,4 +1,10 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import { getGeoSpectrum, type SyntheticSource } from '../../api/geoSpectrum'
 import {
   aggregateCells,
@@ -42,7 +48,10 @@ const hhmm = (sec: number) => {
 
 /** Spread of the measured values, ignoring the outer 5% each side. */
 function fitDomain(cells: CellStat[]): [number, number] | null {
-  const vals = cells.filter((c) => !c.interpolated).map((c) => c.value).sort((a, b) => a - b)
+  const vals = cells
+    .filter((c) => !c.interpolated)
+    .map((c) => c.value)
+    .sort((a, b) => a - b)
   if (vals.length < 2) return null
   const lo = vals[Math.floor(vals.length * 0.05)]
   const hi = vals[Math.ceil(vals.length * 0.95) - 1]
@@ -81,20 +90,31 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
   const centerKey = `${lat},${lon}`
   useEffect(() => {
     let cancelled = false
-    getGeoSpectrum({ center: [lat, lon], endTime: Math.floor(Date.now() / 60_000) * 60 })
+    getGeoSpectrum({
+      center: [lat, lon],
+      endTime: Math.floor(Date.now() / 60_000) * 60,
+    })
       .then((d) => {
         if (cancelled) return
         setLoaded({ key: `${lat},${lon}`, ds: d })
         setWindow([d.startTime, d.endTime])
         setSelectedId(null)
       })
-      .catch(() => !cancelled && setLoaded({ key: `${lat},${lon}`, ds: null, error: 'Could not load geo-tagged spectrum' }))
+      .catch(
+        () =>
+          !cancelled &&
+          setLoaded({
+            key: `${lat},${lon}`,
+            ds: null,
+            error: 'Could not load geo-tagged spectrum',
+          }),
+      )
     return () => {
       cancelled = true
     }
   }, [lat, lon])
-  const ds = loaded?.ds ?? null
-  const error = loaded?.error ?? null
+  const ds = loaded?.key === centerKey ? loaded.ds : null
+  const error = loaded?.key === centerKey ? (loaded.error ?? null) : null
   const loading = loaded?.key !== centerKey
 
   const res = resMode === 'auto' ? resForZoom(zoom) : resMode
@@ -103,7 +123,9 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
 
   const cellMap = useMemo(() => {
     if (!ds || !deferredWindow) return new Map<string, CellStat>()
-    const visible = new Set(ds.sensors.map((s) => s.serial).filter((s) => !hiddenSensors.has(s)))
+    const visible = new Set(
+      ds.sensors.map((s) => s.serial).filter((s) => !hiddenSensors.has(s)),
+    )
     return aggregateCells(ds, {
       freqMin,
       freqMax,
@@ -115,11 +137,25 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
       sensors: visible,
       fillRings,
     })
-  }, [ds, deferredWindow, hiddenSensors, freqMin, freqMax, res, metric, occupancyThresholdDb, fillRings])
+  }, [
+    ds,
+    deferredWindow,
+    hiddenSensors,
+    freqMin,
+    freqMax,
+    res,
+    metric,
+    occupancyThresholdDb,
+    fillRings,
+  ])
   const cells = useMemo(() => [...cellMap.values()], [cellMap])
 
-  const fitted = useMemo(() => (fitScale ? fitDomain(cells) : null), [fitScale, cells])
-  const domain: [number, number] = fitted ?? (metric === 'OCC' ? OCC_DOMAIN : SNR_DOMAIN)
+  const fitted = useMemo(
+    () => (fitScale ? fitDomain(cells) : null),
+    [fitScale, cells],
+  )
+  const domain: [number, number] =
+    fitted ?? (metric === 'OCC' ? OCC_DOMAIN : SNR_DOMAIN)
 
   const tracks: MapTrack[] = useMemo(() => {
     if (!ds || !deferredWindow || !showTracks) return []
@@ -129,19 +165,35 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
         sensor: s.serial,
         name: s.name,
         points: ds.samples
-          .filter((p) => p.sensor === s.serial && p.time >= deferredWindow[0] && p.time <= deferredWindow[1])
+          .filter(
+            (p) =>
+              p.sensor === s.serial &&
+              p.time >= deferredWindow[0] &&
+              p.time <= deferredWindow[1],
+          )
           .map((p) => [p.lat, p.lon] as [number, number]),
       }))
   }, [ds, deferredWindow, hiddenSensors, showTracks])
 
   const sources = useMemo(
-    () => (showSources && ds?.sources ? ds.sources.filter((s) => s.freqMax >= freqMin && s.freqMin <= freqMax) : undefined),
+    () =>
+      showSources && ds?.sources
+        ? ds.sources.filter((s) => s.freqMax >= freqMin && s.freqMin <= freqMax)
+        : undefined,
     [showSources, ds, freqMin, freqMax],
   )
 
-  const sensorName = useCallback((serial: string) => ds?.sensors.find((s) => s.serial === serial)?.name ?? serial, [ds])
+  const sensorName = useCallback(
+    (serial: string) =>
+      ds?.sensors.find((s) => s.serial === serial)?.name ?? serial,
+    [ds],
+  )
 
-  const formatValue = useCallback((v: number) => (metric === 'OCC' ? `${v.toFixed(0)}%` : `${v.toFixed(1)} dB`), [metric])
+  const formatValue = useCallback(
+    (v: number) =>
+      metric === 'OCC' ? `${v.toFixed(0)}%` : `${v.toFixed(1)} dB`,
+    [metric],
+  )
   const describeCell = useCallback(
     (c: CellStat) =>
       c.interpolated
@@ -150,7 +202,7 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
     [],
   )
 
-  const selected = selectedId ? cellMap.get(selectedId) ?? null : null
+  const selected = selectedId ? (cellMap.get(selectedId) ?? null) : null
 
   // Spectrum around the band at the selected cell: the band plus half its width either side.
   const selectedSpectrum = useMemo(() => {
@@ -164,7 +216,9 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
   const sweepCount = cells.reduce((n, c) => n + c.count, 0)
   const metricLabel = METRICS.find((m) => m.key === metric)?.label ?? metric
   const legendTitle =
-    metric === 'OCC' ? `Occupancy (% of bins > ${occupancyThresholdDb} dB)` : `${metricLabel}, ${formatHz(freqMin)} – ${formatHz(freqMax)}`
+    metric === 'OCC'
+      ? `Occupancy (% of bins > ${occupancyThresholdDb} dB)`
+      : `${metricLabel}, ${formatHz(freqMin)} – ${formatHz(freqMax)}`
 
   function pickBand(key: string) {
     setBandKey(key)
@@ -195,75 +249,115 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
   return (
     <div>
       <div className="es-sbar specmon-map-controls">
-        <form className="form-inline" onSubmit={(e) => e.preventDefault()}>
-          <label htmlFor="map-band">Band</label>
-          <select id="map-band" className="form-control input-sm" value={bandKey} onChange={(e) => pickBand(e.target.value)}>
-            {BAND_PRESETS.map((b) => (
-              <option key={b.key} value={b.key}>
-                {b.label}
-              </option>
-            ))}
-            <option value="custom">Custom</option>
-          </select>
-          <input
-            type="number"
-            className="form-control input-sm map-mhz"
-            aria-label="Start frequency in MHz"
-            step={0.1}
-            value={+(freqMin / 1e6).toFixed(3)}
-            onChange={(e) => setCustomFreq('min', e.target.value)}
-          />
-          –
-          <input
-            type="number"
-            className="form-control input-sm map-mhz"
-            aria-label="Stop frequency in MHz"
-            step={0.1}
-            value={+(freqMax / 1e6).toFixed(3)}
-            onChange={(e) => setCustomFreq('max', e.target.value)}
-          />
-          MHz
-          {' | '}
-          <label htmlFor="map-metric">Metric</label>
-          <select id="map-metric" className="form-control input-sm" value={metric} onChange={(e) => setMetric(e.target.value as GeoMetric)}>
-            {METRICS.map((m) => (
-              <option key={m.key} value={m.key}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-          {' | '}
-          <label htmlFor="map-res" title="H3 resolution; Auto follows the map zoom">
-            Hex size
+        <form
+          className="lx-spatial-fields"
+          onSubmit={(e) => e.preventDefault()}
+        >
+          <label className="lx-field" htmlFor="map-band">
+            <span>FREQUENCY BAND</span>
+            <select
+              id="map-band"
+              className="form-control"
+              value={bandKey}
+              onChange={(e) => pickBand(e.target.value)}
+            >
+              {BAND_PRESETS.map((b) => (
+                <option key={b.key} value={b.key}>
+                  {b.label}
+                </option>
+              ))}
+              <option value="custom">Custom</option>
+            </select>
           </label>
-          <select
-            id="map-res"
-            className="form-control input-sm"
-            value={String(resMode)}
-            onChange={(e) => setResMode(e.target.value === 'auto' ? 'auto' : Number(e.target.value))}
-          >
-            <option value="auto">Auto (res {resForZoom(zoom)})</option>
-            {Object.entries(H3_EDGE_M).map(([r, m]) => (
-              <option key={r} value={r}>
-                res {r} · {formatDistance(m)} edge
-              </option>
-            ))}
-          </select>
-          {' | '}
-          <label htmlFor="map-fill" title="Estimate empty hexagons from measured neighbours (inverse distance)">
-            Gap fill
+          <div className="lx-field">
+            <span>RANGE / MHz</span>
+            <div className="lx-frequency-range">
+              <input
+                type="number"
+                className="form-control"
+                aria-label="Start frequency in MHz"
+                step={0.1}
+                min={0}
+                value={+(freqMin / 1e6).toFixed(3)}
+                onChange={(e) => setCustomFreq('min', e.target.value)}
+              />
+              <span>—</span>
+              <input
+                type="number"
+                className="form-control"
+                aria-label="Stop frequency in MHz"
+                step={0.1}
+                min={0}
+                value={+(freqMax / 1e6).toFixed(3)}
+                onChange={(e) => setCustomFreq('max', e.target.value)}
+              />
+            </div>
+          </div>
+          <label className="lx-field" htmlFor="map-metric">
+            <span>METRIC</span>
+            <select
+              id="map-metric"
+              className="form-control"
+              value={metric}
+              onChange={(e) => setMetric(e.target.value as GeoMetric)}
+            >
+              {METRICS.map((m) => (
+                <option key={m.key} value={m.key}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
           </label>
-          <select id="map-fill" className="form-control input-sm" value={fillRings} onChange={(e) => setFillRings(Number(e.target.value))}>
-            <option value={0}>Off</option>
-            <option value={1}>1 ring</option>
-            <option value={2}>2 rings</option>
-          </select>
-          {' | '}
-          <label htmlFor="map-scale">Colour scale</label>
-          <select id="map-scale" className="form-control input-sm" value={fitScale ? 'fit' : 'fixed'} onChange={(e) => setFitScale(e.target.value === 'fit')}>
-            <option value="fixed">Fixed</option>
-            <option value="fit">Fit to data</option>
-          </select>
+          <label className="lx-field" htmlFor="map-res">
+            <span>HEX SIZE</span>
+            <select
+              id="map-res"
+              className="form-control"
+              value={String(resMode)}
+              onChange={(e) =>
+                setResMode(
+                  e.target.value === 'auto' ? 'auto' : Number(e.target.value),
+                )
+              }
+            >
+              <option value="auto">Auto (res {resForZoom(zoom)})</option>
+              {Object.entries(H3_EDGE_M).map(([r, m]) => (
+                <option key={r} value={r}>
+                  res {r} · {formatDistance(m)} edge
+                </option>
+              ))}
+            </select>
+          </label>
+          <details className="lx-spatial-advanced">
+            <summary>Advanced display options</summary>
+            <div>
+              <label className="lx-field" htmlFor="map-fill">
+                <span>GAP FILL / ESTIMATED CELLS</span>
+                <select
+                  id="map-fill"
+                  className="form-control"
+                  value={fillRings}
+                  onChange={(e) => setFillRings(Number(e.target.value))}
+                >
+                  <option value={0}>Off</option>
+                  <option value={1}>1 ring</option>
+                  <option value={2}>2 rings</option>
+                </select>
+              </label>
+              <label className="lx-field" htmlFor="map-scale">
+                <span>COLOUR SCALE</span>
+                <select
+                  id="map-scale"
+                  className="form-control"
+                  value={fitScale ? 'fit' : 'fixed'}
+                  onChange={(e) => setFitScale(e.target.value === 'fit')}
+                >
+                  <option value="fixed">Fixed</option>
+                  <option value="fit">Fit to data</option>
+                </select>
+              </label>
+            </div>
+          </details>
         </form>
       </div>
 
@@ -272,6 +366,7 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
           <span className="specmon-map-label">Time window</span>
           {ds && window_ ? (
             <RzSlider
+              ariaLabel="Time window"
               value={window_[0]}
               high={window_[1]}
               floor={ds.startTime}
@@ -289,25 +384,49 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
           <span className="specmon-map-label">Sensors</span>
           {ds?.sensors.map((s) => (
             <label key={s.serial} className="checkbox-inline">
-              <input type="checkbox" checked={!hiddenSensors.has(s.serial)} onChange={() => toggleSensor(s.serial)} /> {s.name}
+              <input
+                type="checkbox"
+                checked={!hiddenSensors.has(s.serial)}
+                onChange={() => toggleSensor(s.serial)}
+              />{' '}
+              {s.name}
             </label>
           ))}
           <span className="specmon-map-sep">|</span>
           <label className="checkbox-inline">
-            <input type="checkbox" checked={showTracks} onChange={(e) => setShowTracks(e.target.checked)} /> Tracks
+            <input
+              type="checkbox"
+              checked={showTracks}
+              onChange={(e) => setShowTracks(e.target.checked)}
+            />{' '}
+            Tracks
           </label>
           {ds?.sources && (
-            <label className="checkbox-inline" title="Where the synthetic data's modelled transmitters for this band are">
-              <input type="checkbox" checked={showSources} onChange={(e) => setShowSources(e.target.checked)} /> Transmitters
+            <label
+              className="checkbox-inline"
+              title="Where the synthetic data's modelled transmitters for this band are"
+            >
+              <input
+                type="checkbox"
+                checked={showSources}
+                onChange={(e) => setShowSources(e.target.checked)}
+              />{' '}
+              Transmitters
             </label>
           )}
         </div>
       </div>
 
+      {freqMax <= freqMin && (
+        <div className="alert alert-warning" role="alert">
+          Stop frequency must be greater than start frequency.
+        </div>
+      )}
       {ds?.synthetic && (
         <div className="alert alert-warning specmon-map-note" role="status">
-          <strong>Synthetic data.</strong> Mobile sensors don&apos;t report positions yet, so this view shows simulated
-          drives around the selected sensor past modelled FM, TV, cellular, Wi-Fi and ISM transmitters.
+          <strong>Synthetic data.</strong> Mobile sensors don&apos;t report
+          positions yet, so this view shows simulated drives around the selected
+          sensor past modelled FM, TV, cellular, Wi-Fi and ISM transmitters.
         </div>
       )}
       {error && (
@@ -335,7 +454,9 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
 
       <div className="es-sbar">
         <div className="es-msgbox pull-left">
-          {!loading && ds && measuredCount === 0 ? 'No sweeps in this band, window and sensor selection' : ''}
+          {!loading && ds && measuredCount === 0
+            ? 'No sweeps in this band, window and sensor selection'
+            : ''}
         </div>
         Hexagons <span className="es-sbar-val">{measuredCount}</span>
         Sweeps <span className="es-sbar-val">{sweepCount}</span>
@@ -344,13 +465,35 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
           res {res} · {formatDistance(H3_EDGE_M[res])}
         </span>
         Window{' '}
-        <span className="es-sbar-val">{deferredWindow ? `${hhmm(deferredWindow[0])}–${hhmm(deferredWindow[1])}` : '—'}</span>
+        <span className="es-sbar-val">
+          {deferredWindow
+            ? `${hhmm(deferredWindow[0])}–${hhmm(deferredWindow[1])}`
+            : '—'}
+        </span>
       </div>
 
       <div className="row">
         <div className="col-sm-4">
           <div className="panel specmon-map-cell">
             <h4>Selected hexagon</h4>
+            <label className="lx-hex-select">
+              Inspect a measured cell
+              <select
+                className="form-control"
+                aria-label="Select measured hexagon"
+                value={selectedId ?? ''}
+                onChange={(e) => setSelectedId(e.target.value || null)}
+              >
+                <option value="">Choose on the map or from this list</option>
+                {cells
+                  .filter((c) => !c.interpolated)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.id} · {formatValue(c.value)}
+                    </option>
+                  ))}
+              </select>
+            </label>
             {selected ? (
               <table className="table table-condensed">
                 <tbody>
@@ -375,7 +518,8 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
                     <tr>
                       <th>Measured</th>
                       <td>
-                        {printDate(new Date(selected.firstTime * 1000))} – {hhmm(selected.lastTime ?? selected.firstTime)}
+                        {printDate(new Date(selected.firstTime * 1000))} –{' '}
+                        {hhmm(selected.lastTime ?? selected.firstTime)}
                       </td>
                     </tr>
                   )}
@@ -388,7 +532,9 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
                 </tbody>
               </table>
             ) : (
-              <p className="muted">Click a hexagon to see its values and spectrum.</p>
+              <p className="muted">
+                Click a hexagon to see its values and spectrum.
+              </p>
             )}
           </div>
         </div>
@@ -398,14 +544,21 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
             {selFreq != null && (
               <small>
                 {' '}
-                {formatHz(selFreq)} · {selSnr != null ? `${selSnr.toFixed(1)} dB` : '—'}
+                {formatHz(selFreq)} ·{' '}
+                {selSnr != null ? `${selSnr.toFixed(1)} dB` : '—'}
               </small>
             )}
           </h4>
           {!selected ? (
-            <p className="muted">The band&apos;s spectrum, averaged over every sweep in the selected hexagon, appears here.</p>
+            <p className="muted">
+              The band&apos;s spectrum, averaged over every sweep in the
+              selected hexagon, appears here.
+            </p>
           ) : !selectedSpectrum ? (
-            <p className="muted">This hexagon was estimated from its neighbours and has no sweeps of its own.</p>
+            <p className="muted">
+              This hexagon was estimated from its neighbours and has no sweeps
+              of its own.
+            </p>
           ) : (
             <EsBarPlot
               data={selectedSpectrum}

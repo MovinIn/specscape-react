@@ -1,3 +1,4 @@
+import { isPreview } from '../config/navigation'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useMatch } from 'react-router-dom'
 import { api } from '../api/client'
@@ -22,7 +23,8 @@ type UserField =
  * Like $scope.user: starts empty (register) or is the /user/profile response
  * as-is (edit), so updateProfile sends back exactly what the server gave.
  */
-type UserState = Partial<Record<UserField, string | null>> & Record<string, unknown>
+type UserState = Partial<Record<UserField, string | null>> &
+  Record<string, unknown>
 
 /** Server messages come back as a JSON array of strings, e.g. ["Profile changed"]. */
 function messages(data: unknown): string[] {
@@ -175,9 +177,11 @@ export default function RegisterPage() {
         })
         notifier.reset()
         notifier.show(
-          'Account successfully created. Before you can log in, you need to activate your ' +
-            'account using the link in the mail we just sent you. If you cannot find your activation mail,' +
-            ' please check your spam folder.',
+          isPreview
+            ? 'Account created in the local preview.'
+            : 'Account successfully created. Before you can log in, you need to activate your ' +
+                'account using the link in the mail we just sent you. If you cannot find your activation mail,' +
+                ' please check your spam folder.',
           'info',
         )
         resetRecaptcha()
@@ -200,7 +204,11 @@ export default function RegisterPage() {
       <div className="row">
         <div className="col-sm-12">
           <div className="page-header">
-            {!editMode ? <h2>Create a SpecScape Account</h2> : <h2>Edit Profile</h2>}
+            {!editMode ? (
+              <h2>Create a SpecScape Account</h2>
+            ) : (
+              <h2>Edit Profile</h2>
+            )}
           </div>
 
           {editMode ? (
@@ -211,14 +219,18 @@ export default function RegisterPage() {
                   className={!passwordTabActive ? 'active' : ''}
                   onClick={() => setPasswordTabActive(false)}
                 >
-                  <a href="#" onClick={(e) => e.preventDefault()}>Update Profile Data</a>
+                  <a href="#" onClick={(e) => e.preventDefault()}>
+                    Update Profile Data
+                  </a>
                 </li>
                 <li
                   role="presentation"
                   className={passwordTabActive ? 'active' : ''}
                   onClick={() => setPasswordTabActive(true)}
                 >
-                  <a href="#" onClick={(e) => e.preventDefault()}>Change Password</a>
+                  <a href="#" onClick={(e) => e.preventDefault()}>
+                    Change Password
+                  </a>
                 </li>
               </ul>
             </div>
@@ -289,7 +301,10 @@ export default function RegisterPage() {
 
                 {!editMode || user.mail !== beforeEditMail ? (
                   <div className="form-group">
-                    <label className="col-md-4 control-label" htmlFor="email_confirm">
+                    <label
+                      className="col-md-4 control-label"
+                      htmlFor="email_confirm"
+                    >
                       Confirm Email
                     </label>
                     <div className="col-md-4">
@@ -311,8 +326,8 @@ export default function RegisterPage() {
                   <div className="form-group">
                     <div className="col-md-4 col-md-offset-4">
                       <p>
-                        After changing your email address a confirmation mail will be
-                        sent and you{' '}
+                        After changing your email address a confirmation mail
+                        will be sent and you{' '}
                         <span style={{ fontWeight: 'bold' }}>
                           need to re-activate your account
                         </span>{' '}
@@ -325,7 +340,10 @@ export default function RegisterPage() {
                 {!editMode ? (
                   <>
                     <div className="form-group">
-                      <label className="col-md-4 control-label" htmlFor="password">
+                      <label
+                        className="col-md-4 control-label"
+                        htmlFor="password"
+                      >
                         Password
                       </label>
                       <div className="col-md-4">
@@ -337,7 +355,9 @@ export default function RegisterPage() {
                           className="form-control input-md"
                           required
                           value={field('userPassword')}
-                          onChange={(e) => update('userPassword', e.target.value)}
+                          onChange={(e) =>
+                            update('userPassword', e.target.value)
+                          }
                         />
                       </div>
                     </div>
@@ -357,7 +377,9 @@ export default function RegisterPage() {
                           className="form-control input-md"
                           required
                           value={field('confirmPassword')}
-                          onChange={(e) => update('confirmPassword', e.target.value)}
+                          onChange={(e) =>
+                            update('confirmPassword', e.target.value)
+                          }
                         />
                       </div>
                     </div>
@@ -367,10 +389,16 @@ export default function RegisterPage() {
 
               <fieldset>
                 <legend>Optional Information</legend>
-                <p>These might be useful for contacting you in case of technical problems</p>
+                <p>
+                  These might be useful for contacting you in case of technical
+                  problems
+                </p>
 
                 <div className="form-group">
-                  <label className="col-md-4 control-label" htmlFor="organization">
+                  <label
+                    className="col-md-4 control-label"
+                    htmlFor="organization"
+                  >
                     Organization
                   </label>
                   <div className="col-md-4">
@@ -449,7 +477,9 @@ export default function RegisterPage() {
                       placeholder="+44 (000) 1111"
                       className="form-control input-md"
                       value={field('telephoneNumber')}
-                      onChange={(e) => update('telephoneNumber', e.target.value)}
+                      onChange={(e) =>
+                        update('telephoneNumber', e.target.value)
+                      }
                     />
                   </div>
                 </div>
@@ -470,9 +500,13 @@ export default function RegisterPage() {
                           checked={tos}
                           onChange={(e) => setTos(e.target.checked)}
                         />
-                        By checking this box, I confirm that I have read and I agree to
-                        the{' '}
-                        <a href="/terms-of-service" target="_blank" rel="noreferrer">
+                        By checking this box, I confirm that I have read and I
+                        agree to the{' '}
+                        <a
+                          href="/terms-of-service"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
                           Terms of Service
                         </a>
                         .
@@ -487,7 +521,11 @@ export default function RegisterPage() {
                   <div className="form-group">
                     <label className="col-md-4 control-label">Captcha</label>
                     <div className="col-md-4">
-                      <Recaptcha key={widgetKey} onChange={setCaptcha} hideLabel />
+                      <Recaptcha
+                        key={widgetKey}
+                        onChange={setCaptcha}
+                        hideLabel
+                      />
                     </div>
                   </div>
                 </fieldset>
@@ -513,7 +551,9 @@ export default function RegisterPage() {
                         className="form-control input-md"
                         required
                         value={field('editModePassword')}
-                        onChange={(e) => update('editModePassword', e.target.value)}
+                        onChange={(e) =>
+                          update('editModePassword', e.target.value)
+                        }
                       />
                     </div>
                   </div>
@@ -523,7 +563,11 @@ export default function RegisterPage() {
               {editMode ? (
                 <div className="form-group form-actions">
                   <div className="col-sm-offset-4 col-sm-8">
-                    <input type="submit" className="btn btn-primary" value="Update" />
+                    <input
+                      type="submit"
+                      className="btn btn-primary"
+                      value="Update"
+                    />
                   </div>
                 </div>
               ) : (
@@ -562,14 +606,20 @@ export default function RegisterPage() {
                       required
                       value={pw.currentPassword}
                       onChange={(e) =>
-                        setPw((p) => ({ ...p, currentPassword: e.target.value }))
+                        setPw((p) => ({
+                          ...p,
+                          currentPassword: e.target.value,
+                        }))
                       }
                     />
                   </div>
                 </div>
 
                 <div className="form-group">
-                  <label className="col-md-4 control-label" htmlFor="change_password">
+                  <label
+                    className="col-md-4 control-label"
+                    htmlFor="change_password"
+                  >
                     New Password
                   </label>
                   <div className="col-md-4">
@@ -605,7 +655,10 @@ export default function RegisterPage() {
                       required
                       value={pw.newPasswordConfirmed}
                       onChange={(e) =>
-                        setPw((p) => ({ ...p, newPasswordConfirmed: e.target.value }))
+                        setPw((p) => ({
+                          ...p,
+                          newPasswordConfirmed: e.target.value,
+                        }))
                       }
                     />
                   </div>
@@ -613,7 +666,11 @@ export default function RegisterPage() {
 
                 <div className="form-group form-actions">
                   <div className="col-sm-offset-4 col-sm-8">
-                    <input type="submit" className="btn btn-primary" value="Submit" />
+                    <input
+                      type="submit"
+                      className="btn btn-primary"
+                      value="Submit"
+                    />
                   </div>
                 </div>
               </fieldset>

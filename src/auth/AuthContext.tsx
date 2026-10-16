@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { api } from '../api/client'
 import type { Principal } from '../api/types'
+import { isPreview } from '../config/navigation'
 
 type AuthUser = {
   username: string
@@ -43,13 +44,18 @@ function toBasicAuth(username: string, password: string) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null)
-  const [jwt, setJwt] = useState<string | null>(
-    () => localStorage.getItem('authentication_token'),
+  const [user, setUser] = useState<AuthUser | null>(
+    isPreview ? { username: 'demo', admin: true } : null,
   )
-  const [loading, setLoading] = useState(true)
+  const [jwt, setJwt] = useState<string | null>(() =>
+    isPreview
+      ? 'preview-local-only'
+      : localStorage.getItem('authentication_token'),
+  )
+  const [loading, setLoading] = useState(!isPreview)
 
   useEffect(() => {
+    if (isPreview) return
     let cancelled = false
     ;(async () => {
       try {

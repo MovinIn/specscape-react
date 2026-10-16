@@ -1,3 +1,4 @@
+import { isPreview } from '../config/navigation'
 import { useEffect, useId, useRef } from 'react'
 
 const SITE_KEY =
@@ -87,6 +88,8 @@ export function Recaptcha({ onChange, hideLabel }: RecaptchaProps) {
       cancelled = true
     }
   }, [onChange])
+
+  if (isPreview) return null
 
   if (RECAPTCHA_DISABLED) {
     const notice = (

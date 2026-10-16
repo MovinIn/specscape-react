@@ -1,5 +1,12 @@
-import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
+import {
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type Ref,
+} from 'react'
 import { RzSlider } from '../RzSlider'
+import { CHART_BACKGROUND, CHART_GRID, CHART_TEXT } from '../specmon/chartTheme'
 
 export type LivePowerLevelsHandle = {
   setData: (data: number[]) => void
@@ -18,14 +25,20 @@ type Props = {
 }
 
 const HEIGHT = 250
-const FONT = '"Lucida Grande", "Lucida Sans Unicode", Arial, Helvetica, sans-serif'
+const FONT = '-apple-system, BlinkMacSystemFont, Arial, sans-serif'
 
 /**
  * Port of live-power-levels: the Highcharts area chart of the latest PSD
  * (black line, #040534 fill, "Power Level [dB/Hz]" y axis, hidden x axis),
  * drawn on a canvas with Highcharts' default spacing and styling.
  */
-export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWidth, showSlider = false }: Props) {
+export function LivePowerLevels({
+  ref,
+  upperThreshold,
+  lowerThreshold,
+  sliderWidth,
+  showSlider = false,
+}: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const legendCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -57,7 +70,10 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
     const spacingTop = 10
     const spacingBottom = 15
     ctx.font = `11px ${FONT}`
-    const labelW = Math.max(ctx.measureText(String(min)).width, ctx.measureText(String(max)).width)
+    const labelW = Math.max(
+      ctx.measureText(String(min)).width,
+      ctx.measureText(String(max)).width,
+    )
     const plotX = 10 + 16 + 10 + labelW + 8
     const plotY = spacingTop
     const plotW = width - plotX
@@ -65,9 +81,9 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
     const y = (v: number) => plotY + ((max - v) / span) * plotH
 
     // grid lines every 1 dB (tickInterval: 1); labels thinned where they would overlap
-    ctx.strokeStyle = '#e6e6e6'
+    ctx.strokeStyle = CHART_GRID
     ctx.lineWidth = 1
-    ctx.fillStyle = '#666666'
+    ctx.fillStyle = CHART_TEXT
     ctx.textAlign = 'right'
     ctx.textBaseline = 'middle'
     let lastLabelY = -Infinity
@@ -103,11 +119,16 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
       data.forEach((v, i) => ctx.lineTo(x(i), y(v)))
       ctx.lineTo(x(data.length - 1), plotY + plotH)
       ctx.closePath()
-      ctx.fillStyle = '#040534'
+      const area = ctx.createLinearGradient(0, plotY, 0, plotY + plotH)
+      area.addColorStop(0, 'rgba(120,82,238,.34)')
+      area.addColorStop(1, 'rgba(120,82,238,.03)')
+      ctx.fillStyle = area
       ctx.fill()
       ctx.beginPath()
-      data.forEach((v, i) => (i === 0 ? ctx.moveTo(x(i), y(v)) : ctx.lineTo(x(i), y(v))))
-      ctx.strokeStyle = '#000'
+      data.forEach((v, i) =>
+        i === 0 ? ctx.moveTo(x(i), y(v)) : ctx.lineTo(x(i), y(v)),
+      )
+      ctx.strokeStyle = '#7852ee'
       ctx.lineWidth = 1
       ctx.stroke()
       ctx.restore()
@@ -128,6 +149,9 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
       draw()
     },
     clear() {
+      dataRef.current = []
+      lastDataTime.current = 0
+      setNoData(true)
       draw()
     },
   }))
@@ -157,10 +181,10 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
     if (!ctx) return
     const { min, max } = range.current
     const legendH = canvas.height
-    ctx.fillStyle = '#ffffff'
+    ctx.fillStyle = CHART_BACKGROUND
     ctx.fillRect(0, 0, canvas.width, legendH)
     ctx.font = '10px monospace'
-    ctx.fillStyle = '#999999'
+    ctx.fillStyle = CHART_TEXT
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
     ctx.fillText(`${max} dB`, 2, 2)
@@ -168,7 +192,7 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
     ctx.fillText(`${min} dB`, 2, legendH - 2)
     // draw tick marks at every 10 dB
     const span = max - min || 1
-    ctx.strokeStyle = '#cccccc'
+    ctx.strokeStyle = CHART_GRID
     ctx.lineWidth = 1
     for (let v = Math.ceil(min / 10) * 10; v <= max; v += 10) {
       const yy = legendH - ((v - min) / span) * legendH
@@ -177,7 +201,7 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
       ctx.lineTo(canvas.width, yy)
       ctx.stroke()
       if (v !== min && v !== max) {
-        ctx.fillStyle = '#666666'
+        ctx.fillStyle = CHART_TEXT
         ctx.textBaseline = 'middle'
         ctx.fillText(`${v}`, 2, yy)
       }
@@ -185,7 +209,10 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
   }
 
   useEffect(() => {
-    const t = window.setInterval(() => setNoData(Date.now() - lastDataTime.current > 100), 250)
+    const t = window.setInterval(
+      () => setNoData(Date.now() - lastDataTime.current > 2000),
+      500,
+    )
     const wrap = wrapRef.current
     const ro = new ResizeObserver(() => draw())
     if (wrap) ro.observe(wrap)
@@ -199,14 +226,27 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
   const spacer = Math.max(0, sliderWidth - 73)
 
   return (
-    <div style={{ width: '100%', display: 'flex', flexDirection: 'row', alignItems: 'stretch' }}>
+    <div
+      style={{
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'stretch',
+      }}
+    >
       {showSlider ? (
         // Vertical range slider + dB legend, mirroring the waterfall slider layout
         <div
           id="es-power-slider-container"
-          style={{ display: 'flex', flexDirection: 'row', height: HEIGHT, flexShrink: 0 }}
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            height: HEIGHT,
+            flexShrink: 0,
+          }}
         >
           <RzSlider
+            ariaLabel="Power range"
             vertical
             value={sliderLow}
             high={sliderHigh}
@@ -227,7 +267,9 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
           />
         </div>
       ) : (
-        <div style={{ flexBasis: spacer, minWidth: spacer, flexGrow: 0 }}>&nbsp;</div>
+        <div style={{ flexBasis: spacer, minWidth: spacer, flexGrow: 0 }}>
+          &nbsp;
+        </div>
       )}
       <div style={{ flex: '1 0 auto', width: 100 }}>
         <div style={{ width: '100%', minHeight: HEIGHT, position: 'relative' }}>

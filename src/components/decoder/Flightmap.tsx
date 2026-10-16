@@ -17,7 +17,7 @@ export type AircraftState = {
 
 export type FlightmapHandle = {
   acState: (s: AircraftState) => void
-  /** Ships: the legacy handler throws before drawing anything, so none are shown. */
+  /** Accept a vessel, an array of vessels or a ships envelope. */
   aisState: (payload: unknown) => void
 }
 
@@ -34,70 +34,50 @@ type Props = {
 // OpenSky state vector: [icao24, callsign, country, timePos, lastContact, lon, lat, baroAlt,
 //   onGround, velocity, track, vertRate, sensors, geoAlt, squawk, spi, posSource, category]
 type StateVector = [
-  string, string | undefined, string, number, number, number | undefined, number | undefined,
-  number | undefined, boolean, number, number | undefined, number | undefined, null,
-  number | undefined, string | undefined, boolean, number, number,
+  string,
+  string | undefined,
+  string,
+  number,
+  number,
+  number | undefined,
+  number | undefined,
+  number | undefined,
+  boolean,
+  number,
+  number | undefined,
+  number | undefined,
+  null,
+  number | undefined,
+  string | undefined,
+  boolean,
+  number,
+  number,
 ]
 
-const SPRITE_ROWS: Record<string, number> = { w: 1, g: 3, w_qm: 7, g_qm: 7 }
-const QM_COLUMN: Record<string, number> = { w_qm: 1, g_qm: 3 }
-
-const sprites: Record<string, HTMLImageElement> = {}
-function sprite(name: string) {
-  if (!sprites[name]) {
-    const img = new Image()
-    img.src = `/images/planes/planes${name}.png`
-    sprites[name] = img
-  }
-  return sprites[name]
+function transportIcon(heading: number, ship = false): L.DivIcon {
+  const path = ship
+    ? 'M12 2 19 18l-7-4-7 4Z'
+    : 'm12 2 2 7 7 4v2l-7-2v5l3 2v1l-5-1-5 1v-1l3-2v-5l-7 2v-2l7-4Z'
+  return L.divIcon({
+    className: 'lx-transport-icon',
+    html: `<svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" viewBox="0 0 24 24" style="transform:rotate(${Number.isFinite(heading) ? heading : 0}deg)"><path d="${path}" fill="${ship ? '#65a7ba' : '#9875c5'}" stroke="white" stroke-width="1.2"/></svg>`,
+    iconSize: [25, 25],
+    iconAnchor: [12, 12],
+  })
 }
 
-const iconCache: Record<string, L.Icon> = {}
-
-/** HybridMap.getFlightmarkerImageId: 12° heading steps, 3 sizes by zoom, white/grey by ground state. */
-function planeIcon(state: StateVector, zoom: number): L.Icon {
-  const heading0 = state[10]
-  const leftFactor = Number((((heading0 ?? 0) + 360) % 360 / 12).toFixed(0)) % 30
-  let heading = leftFactor * 12
-  let name = '_small'
-  let size = 20
-  let spriteWidth = 600
-  if (zoom >= 10) {
-    name = ''
-    size = 40
-    spriteWidth = 1200
-  } else if (zoom >= 8) {
-    name = '_medium'
-    size = 30
-    spriteWidth = 900
-  }
-  let left = size * leftFactor
-  if (left > spriteWidth - size) left = 0
-
-  let color = state[8] ? 'g' : 'w'
-  if (heading0 == null) {
-    color = `${color}_qm`
-    heading = 0
-    left = size * QM_COLUMN[color]
-  }
-  const top = size * SPRITE_ROWS[color]
-  const id = `plane${name}${color}${heading}`
-  const img = sprite(name)
-  if (iconCache[id]) return iconCache[id]
-
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const loaded = img.complete && img.naturalWidth > 0
-  if (loaded) canvas.getContext('2d')!.drawImage(img, left, top, size, size, 0, 0, size, size)
-  const icon = L.icon({ iconUrl: canvas.toDataURL(), iconSize: [size, size], iconAnchor: [size / 2, size / 2] })
-  if (loaded) iconCache[id] = icon
-  return icon
+function escapeHtml(value: unknown) {
+  return String(value).replace(
+    /[&<>"']/g,
+    (character) => `&#${character.charCodeAt(0)};`,
+  )
 }
 
 function popupHtml(s: StateVector) {
   const row = (k: string, v: unknown) =>
-    v == null || v === '' ? '' : `<tr><td class="text-primary">${k}</td><td>${String(v)}</td></tr>`
+    v == null || v === ''
+      ? ''
+      : `<tr><td class="text-primary">${k}</td><td>${escapeHtml(v)}</td></tr>`
   return `<table class="table table-condensed" style="margin:0">
     ${row('Callsign', s[1]?.trim())}${row('ICAO24', s[0])}${row('Altitude', s[7] != null ? `${s[7]} ft` : null)}
     ${row('Speed', s[9] ? `${Math.round(s[9] * 1.9438)} kt` : null)}${row('Track', s[10] != null ? `${s[10]}°` : null)}
@@ -105,27 +85,35 @@ function popupHtml(s: StateVector) {
 }
 
 /** Port of the flightmap component (OpenSky HybridMap on Leaflet) for ADS-B/AIS. */
-export function Flightmap({ ref, aircraft = false, center, refresh }: Props) {
+export function Flightmap({
+  ref,
+  aircraft = false,
+  ships = false,
+  center,
+  refresh,
+}: Props) {
   const divRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const flights = useRef<Record<string, StateVector>>({})
   const markers = useRef<Record<string, L.Marker>>({})
+  const shipMarkers = useRef<Record<string, L.Marker>>({})
 
   function render() {
     const map = mapRef.current
     if (!map) return
-    const zoom = map.getZoom()
     for (const [icao, s] of Object.entries(flights.current)) {
       if (s[5] == null || s[6] == null) continue
       const ll: L.LatLngExpression = [s[6], s[5]]
-      const icon = planeIcon(s, zoom)
+      const icon = transportIcon(s[10] ?? 0)
       const m = markers.current[icao]
       if (m) {
         m.setLatLng(ll)
         m.setIcon(icon)
         m.setPopupContent(popupHtml(s))
       } else {
-        markers.current[icao] = L.marker(ll, { icon }).bindPopup(popupHtml(s)).addTo(map)
+        markers.current[icao] = L.marker(ll, { icon })
+          .bindPopup(popupHtml(s))
+          .addTo(map)
       }
     }
     for (const icao of Object.keys(markers.current)) {
@@ -140,13 +128,70 @@ export function Flightmap({ ref, aircraft = false, center, refresh }: Props) {
     acState(s: AircraftState) {
       if (!aircraft) return
       flights.current[s.icao24] = [
-        s.icao24, s.flight, '', s.now, s.now, s.lon, s.lat, s.altitude, false,
-        (s.speed ?? 0) / 1.9438, s.track, s.vert_rate, null, s.altitude, s.squawk, false, 1, 0,
+        s.icao24,
+        s.flight,
+        '',
+        s.now,
+        s.now,
+        s.lon,
+        s.lat,
+        s.altitude,
+        false,
+        (s.speed ?? 0) / 1.9438,
+        s.track,
+        s.vert_rate,
+        null,
+        s.altitude,
+        s.squawk,
+        false,
+        1,
+        0,
       ]
       render()
     },
-    aisState() {
-      // legacy newShipState references an undefined variable and throws before drawing
+    aisState(payload: unknown) {
+      if (!ships || !mapRef.current || !payload) return
+      const raw = payload as Record<string, unknown>
+      const rows = Array.isArray(payload)
+        ? payload
+        : Array.isArray(raw.ships)
+          ? raw.ships
+          : [payload]
+      for (const entry of rows) {
+        if (!entry || typeof entry !== 'object') continue
+        const vessel = entry as Record<string, unknown>
+        const latitude = vessel.lat ?? vessel.latitude
+        const longitude = vessel.lon ?? vessel.longitude
+        if (latitude == null || longitude == null) continue
+        const lat = Number(latitude),
+          lon = Number(longitude)
+        if (
+          !Number.isFinite(lat) ||
+          !Number.isFinite(lon) ||
+          Math.abs(lat) > 90 ||
+          Math.abs(lon) > 180
+        )
+          continue
+        const id = String(
+          vessel.mmsi ?? vessel.MMSI ?? vessel.id ?? `${lat},${lon}`,
+        )
+        const name = vessel.name ?? vessel.shipname ?? id
+        const heading = Number(vessel.heading ?? vessel.course ?? 0)
+        const popup = `<strong>${escapeHtml(name)}</strong><br/>MMSI ${escapeHtml(id)}<br/>Speed ${escapeHtml(vessel.speed ?? 'Unknown')} kt`
+        const existing = shipMarkers.current[id]
+        if (existing)
+          existing
+            .setLatLng([lat, lon])
+            .setIcon(transportIcon(heading, true))
+            .setPopupContent(popup)
+        else
+          shipMarkers.current[id] = L.marker([lat, lon], {
+            icon: transportIcon(heading, true),
+            title: String(name),
+          })
+            .bindPopup(popup)
+            .addTo(mapRef.current)
+      }
     },
   }))
 
@@ -156,7 +201,6 @@ export function Flightmap({ ref, aircraft = false, center, refresh }: Props) {
     const map = L.map(el, {
       zoom: 8,
       center: [38.69508190866783, 0.12657142515286068],
-      renderer: L.canvas(),
       scrollWheelZoom: false,
       dragging: true,
     })
@@ -167,8 +211,6 @@ export function Flightmap({ ref, aircraft = false, center, refresh }: Props) {
     }).addTo(map)
     map.on('zoomend', render)
     mapRef.current = map
-    // preload sprites so icons are ready by the first message
-    ;['_small', '_medium', ''].forEach(sprite)
 
     const cleanup = window.setInterval(() => {
       const now = Date.now() / 1000
@@ -182,6 +224,7 @@ export function Flightmap({ ref, aircraft = false, center, refresh }: Props) {
       map.remove()
       mapRef.current = null
       markers.current = {}
+      shipMarkers.current = {}
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -197,7 +240,10 @@ export function Flightmap({ ref, aircraft = false, center, refresh }: Props) {
 
   return (
     <>
-      <div ref={divRef} style={{ width: '100%', height: 420, position: 'relative' }} />
+      <div
+        ref={divRef}
+        style={{ width: '100%', height: 420, position: 'relative' }}
+      />
       <div id="infomarkerTriggerContainer" style={{ display: 'none' }} />
     </>
   )

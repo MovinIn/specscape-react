@@ -71,19 +71,34 @@ export type AggregateOptions = {
 }
 
 /** Inclusive bin range covering [freqMin, freqMax], at least one bin wide. */
-export function bandBins(ds: GeoSpectrumDataset, freqMin: number, freqMax: number): [number, number] {
+export function bandBins(
+  ds: GeoSpectrumDataset,
+  freqMin: number,
+  freqMax: number,
+): [number, number] {
   const lo = Math.max(0, Math.floor((freqMin - ds.startFreq) / ds.freqRes))
-  const hi = Math.min(ds.bins - 1, Math.ceil((freqMax - ds.startFreq) / ds.freqRes) - 1)
-  return hi < lo ? [Math.min(lo, ds.bins - 1), Math.min(lo, ds.bins - 1)] : [lo, hi]
+  const hi = Math.min(
+    ds.bins - 1,
+    Math.ceil((freqMax - ds.startFreq) / ds.freqRes) - 1,
+  )
+  return hi < lo
+    ? [Math.min(lo, ds.bins - 1), Math.min(lo, ds.bins - 1)]
+    : [lo, hi]
 }
 
 /** Collapses one sweep to a single number for the band, or NaN if empty. */
-function sampleValue(v: Float32Array, lo: number, hi: number, metric: GeoMetric, threshold: number): number {
+function sampleValue(
+  v: Float32Array,
+  lo: number,
+  hi: number,
+  metric: GeoMetric,
+  threshold: number,
+): number {
   let n = 0
   let acc = metric === 'MAX' ? -Infinity : 0
   for (let j = lo; j <= hi; j++) {
     const x = v[j]
-    if (Number.isNaN(x)) continue
+    if (!Number.isFinite(x)) continue
     n++
     if (metric === 'AVG') acc += x
     else if (metric === 'MAX') acc = x > acc ? x : acc
@@ -96,11 +111,27 @@ function sampleValue(v: Float32Array, lo: number, hi: number, metric: GeoMetric,
 }
 
 /** Bins the dataset onto H3 cells at `opts.res`. */
-export function aggregateCells(ds: GeoSpectrumDataset, opts: AggregateOptions): Map<string, CellStat> {
+export function aggregateCells(
+  ds: GeoSpectrumDataset,
+  opts: AggregateOptions,
+): Map<string, CellStat> {
+  if (
+    opts.freqMax <= opts.freqMin ||
+    opts.freqMax <= ds.startFreq ||
+    opts.freqMin >= ds.startFreq + ds.freqRes * ds.bins
+  )
+    return new Map()
   const [lo, hi] = bandBins(ds, opts.freqMin, opts.freqMax)
   const acc = new Map<string, CellStat & { sensorSet: Set<string> }>()
 
   ds.samples.forEach((s, i) => {
+    if (
+      !Number.isFinite(s.lat) ||
+      !Number.isFinite(s.lon) ||
+      Math.abs(s.lat) > 90 ||
+      Math.abs(s.lon) > 180
+    )
+      return
     if (s.time < opts.timeBegin || s.time > opts.timeEnd) return
     if (opts.sensors && !opts.sensors.has(s.sensor)) return
     const v = sampleValue(s.values, lo, hi, opts.metric, opts.threshold)
@@ -163,7 +194,14 @@ function fillGaps(cells: Map<string, CellStat>, rings: number) {
     })
   }
   for (const [id, e] of est) {
-    cells.set(id, { id, value: e.sum / e.w, count: 0, interpolated: true, samples: [], sensors: [] })
+    cells.set(id, {
+      id,
+      value: e.sum / e.w,
+      count: 0,
+      interpolated: true,
+      samples: [],
+      sensors: [],
+    })
   }
 }
 
@@ -181,7 +219,7 @@ export function cellSpectrum(
     const v = ds.samples[i].values
     for (let j = 0; j < n; j++) {
       const x = v[lo + j]
-      if (Number.isNaN(x)) continue
+      if (!Number.isFinite(x)) continue
       sums[j] += x
       counts[j]++
     }
@@ -205,7 +243,14 @@ export function resForZoom(zoom: number): number {
 
 /** Approximate hexagon edge length per resolution, for the UI. */
 export const H3_EDGE_M: Record<number, number> = {
-  4: 22_600, 5: 8_540, 6: 3_230, 7: 1_220, 8: 461, 9: 174, 10: 66, 11: 25,
+  4: 22_600,
+  5: 8_540,
+  6: 3_230,
+  7: 1_220,
+  8: 461,
+  9: 174,
+  10: 66,
+  11: 25,
 }
 
 export function formatDistance(m: number): string {
@@ -232,7 +277,8 @@ const HEAT: [number, number, number][] = [
 ]
 
 export function heatColor(t: number): string {
-  const x = Math.min(1, Math.max(0, Number.isFinite(t) ? t : 0)) * (HEAT.length - 1)
+  const x =
+    Math.min(1, Math.max(0, Number.isFinite(t) ? t : 0)) * (HEAT.length - 1)
   const i = Math.min(HEAT.length - 2, Math.floor(x))
   const f = x - i
   const a = HEAT[i]
@@ -245,7 +291,12 @@ export function heatGradientCss(): string {
 }
 
 /** Named bands for the map's band picker. Downlink ranges for cellular. */
-export const BAND_PRESETS: { key: string; label: string; min: number; max: number }[] = [
+export const BAND_PRESETS: {
+  key: string
+  label: string
+  min: number
+  max: number
+}[] = [
   { key: 'all', label: 'Full range', min: 20e6, max: 3000e6 },
   { key: 'fm', label: 'FM broadcast', min: 87.5e6, max: 108e6 },
   { key: 'ism433', label: 'ISM 433 MHz', min: 430e6, max: 440e6 },
@@ -254,7 +305,12 @@ export const BAND_PRESETS: { key: string; label: string; min: number; max: numbe
   { key: 'gsm900', label: 'GSM/LTE 900 downlink', min: 925e6, max: 960e6 },
   { key: 'adsb', label: 'ADS-B 1090 MHz', min: 1086e6, max: 1094e6 },
   { key: 'lte1800', label: 'LTE 1800 downlink', min: 1805e6, max: 1880e6 },
-  { key: 'umts2100', label: 'UMTS/LTE 2100 downlink', min: 2110e6, max: 2170e6 },
+  {
+    key: 'umts2100',
+    label: 'UMTS/LTE 2100 downlink',
+    min: 2110e6,
+    max: 2170e6,
+  },
   { key: 'wifi24', label: 'Wi-Fi 2.4 GHz', min: 2400e6, max: 2484e6 },
   { key: 'lte2600', label: 'LTE 2600 downlink', min: 2620e6, max: 2690e6 },
 ]

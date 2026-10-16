@@ -1,8 +1,15 @@
-import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
+import {
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type Ref,
+} from 'react'
 import { printHzUnit } from '../../lib/spectrum'
 import type { PsdPayload } from '../../streaming/deser'
 import { RzSlider } from '../RzSlider'
 import { makeColorScale } from '../specmon/waterfallEngine'
+import { CHART_BACKGROUND, CHART_TEXT } from '../specmon/chartTheme'
 
 export type LiveWaterfallHandle = {
   addPsd: (payload: PsdPayload) => void
@@ -20,6 +27,8 @@ type Props = {
   onThresholds: (upper: number, lower: number) => void
   /** Width of the slider column; the page aligns the power chart with it. */
   onSliderWidth: (width: number) => void
+  /** Fill the local simulator's first frame; real streams only show received rows. */
+  seedPreviewHistory?: boolean
 }
 
 const HEIGHT = 250
@@ -59,20 +68,21 @@ export function LiveWaterfall(props: Props) {
     const ctx = legendRef.current?.getContext('2d')
     if (!ctx) return
     const s = st.current
-    ctx.fillStyle = '#ffffff'
+    ctx.fillStyle = CHART_BACKGROUND
     ctx.fillRect(0, 0, s.width, 100)
     const spacer = 5
     const fontSize = 11
     ctx.font = `${fontSize}px monospace`
-    ctx.strokeStyle = 'rgba(0, 0, 0)'
+    ctx.strokeStyle = CHART_TEXT
     ctx.lineWidth = 1
-    ctx.fillStyle = '#000000'
+    ctx.fillStyle = CHART_TEXT
 
     let lastX: number | null = null
     for (let i = 0; i < s.width; i++) {
       const cFreq = printHzUnit(s.minFreq + i * s.res, 6)
       const ts = ctx.measureText(cFreq)
-      if (lastX != null && (lastX + 2 * spacer > i || i + ts.width > s.width)) continue
+      if (lastX != null && (lastX + 2 * spacer > i || i + ts.width > s.width))
+        continue
       ctx.fillText(cFreq, i - 1, fontSize + 2)
       ctx.beginPath()
       ctx.moveTo(i, fontSize + spacer + 1)
@@ -89,12 +99,23 @@ export function LiveWaterfall(props: Props) {
     drawLegend()
   }
 
-  function onResize() {
+  function onResize(force = false) {
     const canvas = canvasRef.current
     const legend = legendRef.current
     if (!canvas || !legend) return
     const s = st.current
-    s.width = Math.max(1, Math.floor((canvas.parentElement as HTMLElement).clientWidth))
+    const nextWidth = Math.max(
+      1,
+      Math.floor((canvas.parentElement as HTMLElement).clientWidth),
+    )
+    if (
+      !force &&
+      s.width === nextWidth &&
+      canvas.width === nextWidth &&
+      legend.width === nextWidth
+    )
+      return
+    s.width = nextWidth
     canvas.width = s.width
     legend.width = s.width
     s.currentLine = 0
@@ -107,16 +128,19 @@ export function LiveWaterfall(props: Props) {
     const s = st.current
     if (data.length !== s.dataLength) {
       s.dataLength = data.length
-      onResize()
+      onResize(true)
     }
-    const draw = (y: number) => {
+    const draw = (y: number, height = 1) => {
       for (let i = 0; i < data.length; i++) {
         ctx.fillStyle = s.colors(data[i])
         // legacy draws (i-1)*stretch wide rects that later bins overwrite
-        ctx.fillRect((i - 1) * s.stretch, y, i * s.stretch, 1)
+        ctx.fillRect((i - 1) * s.stretch, y, i * s.stretch, height)
       }
     }
-    if (s.currentLine < HEIGHT) {
+    if (propsRef.current.seedPreviewHistory && s.currentLine === 0) {
+      draw(0, HEIGHT)
+      s.currentLine = HEIGHT
+    } else if (s.currentLine < HEIGHT) {
       draw(s.currentLine++)
     } else {
       const current = ctx.getImageData(0, 0, s.width, HEIGHT)
@@ -131,7 +155,11 @@ export function LiveWaterfall(props: Props) {
       if (!canvas) return
       const s = st.current
       // resize after the waterfall was sized while hidden
-      if (s.width !== Math.floor((canvas.parentElement as HTMLElement).clientWidth)) onResize()
+      if (
+        s.width !==
+        Math.floor((canvas.parentElement as HTMLElement).clientWidth)
+      )
+        onResize()
       s.lastDataTime = Date.now()
       setNoData(false)
       addLine(p.data)
@@ -141,13 +169,18 @@ export function LiveWaterfall(props: Props) {
       updateLegend()
     },
     clear() {
-      onResize()
+      st.current.lastDataTime = 0
+      setNoData(true)
+      onResize(true)
     },
   }))
 
   useEffect(() => {
-    onResize()
-    const t = window.setInterval(() => setNoData(Date.now() - st.current.lastDataTime > 100), 1000)
+    onResize(true)
+    const t = window.setInterval(
+      () => setNoData(Date.now() - st.current.lastDataTime > 2000),
+      1000,
+    )
     const onWin = () => onResize()
     window.addEventListener('resize', onWin)
     return () => {
@@ -185,12 +218,20 @@ export function LiveWaterfall(props: Props) {
       const v = 0 - (50 / legendHeight) * i
       if (v < valMax && !upperDrawn && valMax < 0) {
         ctx.fillStyle = '#000000'
-        ctx.fillText(`${valMax} dB`, textX, Math.max(ascent * 2, i + ascent / 2))
+        ctx.fillText(
+          `${valMax} dB`,
+          textX,
+          Math.max(ascent * 2, i + ascent / 2),
+        )
         upperDrawn = true
         upper = i / legendHeight
       } else if (v < valQ1 && !lowerDrawn) {
         ctx.fillStyle = '#000000'
-        ctx.fillText(`${valQ1} dB`, textX, Math.min(legendHeight - ascent, i + ascent / 2))
+        ctx.fillText(
+          `${valQ1} dB`,
+          textX,
+          Math.min(legendHeight - ascent, i + ascent / 2),
+        )
         lowerDrawn = true
         ctx.fillStyle = '#ffffff'
         lower = i / legendHeight
@@ -205,7 +246,9 @@ export function LiveWaterfall(props: Props) {
   useEffect(() => {
     const col = sliderColRef.current
     if (!col) return
-    const ro = new ResizeObserver(() => propsRef.current.onSliderWidth(showSlider ? col.offsetWidth : 0))
+    const ro = new ResizeObserver(() =>
+      propsRef.current.onSliderWidth(showSlider ? col.offsetWidth : 0),
+    )
     ro.observe(col)
     return () => ro.disconnect()
   }, [showSlider])
@@ -254,8 +297,11 @@ export function LiveWaterfall(props: Props) {
           className={showSlider ? 'col-sm-1' : 'col-sm-0 hidden'}
           id="es-waterfall-slider-container"
         >
-          <div style={{ display: 'flex', flexDirection: 'row', height: HEIGHT }}>
+          <div
+            style={{ display: 'flex', flexDirection: 'row', height: HEIGHT }}
+          >
             <RzSlider
+              ariaLabel="Live waterfall colour scale"
               vertical
               value={colorProp}
               high={colorPropHigh}
@@ -267,7 +313,12 @@ export function LiveWaterfall(props: Props) {
               }}
               style={{ flex: '1 1 auto' }}
             />
-            <canvas ref={colorLegendRef} id="es-color-legend-container" width={80} height={HEIGHT} />
+            <canvas
+              ref={colorLegendRef}
+              id="es-color-legend-container"
+              width={80}
+              height={HEIGHT}
+            />
           </div>
         </div>
         <div className={showSlider ? 'col-sm-11' : 'col-sm-12'}>
@@ -276,17 +327,27 @@ export function LiveWaterfall(props: Props) {
               ref={legendRef}
               id="es-waterfall-legend-1"
               height={25}
-              style={{ backgroundColor: '#ffffff', marginBottom: 0, display: 'block' }}
+              style={{
+                backgroundColor: '#ffffff',
+                marginBottom: 0,
+                display: 'block',
+              }}
             />
             <canvas
               ref={canvasRef}
               id="es-streaming-waterfall-1"
               height={HEIGHT}
-              style={{ backgroundColor: '#ffffff', textAlign: 'center', marginTop: 0, display: 'block' }}
+              style={{
+                backgroundColor: '#ffffff',
+                textAlign: 'center',
+                marginTop: 0,
+                display: 'block',
+              }}
               onMouseMove={onMouseMove}
               onMouseUp={onMouseUp}
               onMouseOut={() => {
-                if (tooltipRef.current) tooltipRef.current.style.display = 'none'
+                if (tooltipRef.current)
+                  tooltipRef.current.style.display = 'none'
               }}
             />
             {noData ? (
@@ -308,7 +369,10 @@ export function LiveWaterfall(props: Props) {
                   <div />
                 </div>
                 <h3>Waiting for data</h3>
-                <p>Please stand by, changing decoder settings sometimes takes up to 15 seconds.</p>
+                <p>
+                  Please stand by, changing decoder settings sometimes takes up
+                  to 15 seconds.
+                </p>
               </div>
             ) : null}
           </div>

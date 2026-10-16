@@ -1,463 +1,330 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import type { ControllerInfo, Sensor, SensorStatusEntry } from '../api/types'
+import type { SensorStatusEntry } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { EsLeafletMap, type MapSensor } from '../components/EsLeafletMap'
-
-function coordsOf(s: Sensor): { lat: number; lon: number } | null {
-  const lat = Number(s.position?.latitude ?? s.latitude ?? s.lat)
-  const lon = Number(s.position?.longitude ?? s.longitude ?? s.lon)
-  if (Number.isFinite(lat) && Number.isFinite(lon)) return { lat, lon }
-  return null
-}
-
-function fmtDate(epochSeconds?: number | string | null): string {
-  if (!epochSeconds) return ''
-  const d = new Date(Number(epochSeconds) * 1000)
-  if (Number.isNaN(d.getTime())) return ''
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-}
-
-function fmtDateTime(epochSeconds?: number | string | null): string {
-  if (!epochSeconds) return ''
-  const d = new Date(Number(epochSeconds) * 1000)
-  if (Number.isNaN(d.getTime())) return ''
-  const p = (n: number) => String(n).padStart(2, '0')
-  return (
-    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
-    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
-  )
-}
-
-/** Mirrors the label markup of the original sensormap template. */
-function StatusLabel({
-  sensor,
-  controller,
-}: {
-  sensor: Sensor
-  controller?: ControllerInfo
-}) {
-  if (sensor.sensing && !sensor.liveDecoding) {
-    return (
-      <span className="label label-success" title="Sensor is sending data for a campaign">
-        sensing
-      </span>
-    )
-  }
-  if (sensor.sensing && sensor.liveDecoding) {
-    return (
-      <span className="label label-info" title="Sensor is live decoding">
-        sensing
-      </span>
-    )
-  }
-  if (!controller || controller.Status === 'OFF') {
-    return (
-      <span className="label label-danger" title="Sensor is not connected">
-        offline
-      </span>
-    )
-  }
-  if (controller.Status === 'ERROR') {
-    return (
-      <span className="label label-danger" title="Sensor is in an error state">
-        ERROR
-      </span>
-    )
-  }
-  return <span className="label label-info">{controller.Status}</span>
-}
-
-function LastStatusCell({ sensor }: { sensor: Sensor }) {
-  if (!sensor.lastConnectionEvent) {
-    return (
-      <i title="Sensor has never sent any data">unknown</i>
-    )
-  }
-  return (
-    <span
-      title={
-        sensor.sensing
-          ? 'Time since sensor is sending data'
-          : 'Last time sensor sent data'
-      }
-    >
-      {fmtDateTime(sensor.lastConnectionEvent)}
-    </span>
-  )
-}
-
-function PositionBadge({ sensor, short }: { sensor: Sensor; short?: boolean }) {
-  const indoor = Boolean(sensor.position?.indoor)
-  if (short) return <span className="badge">{indoor ? 'IN' : 'OUT'}</span>
-  return <span className="badge">{indoor ? 'INDOOR' : 'OUTDOOR'}</span>
-}
+import LeafletMap from '../components/LeafletMap'
+import { WorkspaceHeading } from '../components/WorkspaceHeading'
+import { isPreview } from '../config/navigation'
+import { sensorMarkers, sensorMatches, sensorPosition } from '../lib/sensors'
 
 export default function SensorsPage() {
   const { user, isAdmin } = useAuth()
-  const [sensors, setSensors] = useState<Sensor[]>([])
-  const [statusMap, setStatusMap] = useState<Record<string, ControllerInfo>>({})
-  const [selected, setSelected] = useState<Sensor | null>(null)
-  const [search, setSearch] = useState('')
-  const [statusDialog, setStatusDialog] = useState<Sensor | null>(null)
-
-  // /sensor/status/list carries both the sensor metadata and the controller
-  // status, so it is the single source for this page (as in sensormap.js).
-  const load = useCallback(async () => {
-    try {
-      const list = (await api.getSensorStatus()) as SensorStatusEntry[]
-      if (!Array.isArray(list)) return
-      const map: Record<string, ControllerInfo> = {}
-      for (const entry of list) {
-        const serial = entry.staticInfo?.serial
-        if (serial !== undefined && serial !== null) {
-          map[String(serial)] = (entry.controllerInfo ?? {}) as ControllerInfo
+  const [entries, setEntries] = useState<SensorStatusEntry[]>([])
+  const searchRef = useRef<HTMLInputElement>(null)
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<'all' | 'sensing' | 'mine'>('all')
+  const [selectedSerial, setSelectedSerial] = useState<string | null>(null)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const list = await api.getSensorStatus()
+        if (!cancelled) {
+          setEntries(Array.isArray(list) ? list : [])
+          setStatus('ready')
         }
+      } catch {
+        if (!cancelled) setStatus('error')
       }
-      setStatusMap(map)
-      setSensors(list.map((e) => e.staticInfo).filter(Boolean) as Sensor[])
-    } catch {
-      // keep the previous list on a failed poll
     }
+    void load()
+    const timer = window.setInterval(() => void load(), 10_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [attempt])
+
+  const sensors = useMemo(
+    () => entries.flatMap((e) => (e.staticInfo ? [e.staticInfo] : [])),
+    [entries],
+  )
+  const filtered = useMemo(
+    () =>
+      sensors.filter(
+        (s) =>
+          sensorMatches(s, query) &&
+          (filter === 'all' ||
+            (filter === 'sensing' ? s.sensing : s.uid === user?.username)),
+      ),
+    [sensors, query, filter, user?.username],
+  )
+  const markers = useMemo(() => sensorMarkers(filtered), [filtered])
+  const selected =
+    filtered.find((s) => String(s.serial) === selectedSerial) ?? filtered[0]
+  const selectedStatus = entries.find(
+    (e) => e.staticInfo?.serial === selected?.serial,
+  )?.controllerInfo
+  const position = selected ? sensorPosition(selected) : null
+  const sensing = sensors.filter((s) => s.sensing).length
+  useEffect(() => {
+    const shortcut = (e: KeyboardEvent) => {
+      if (
+        e.key === '/' &&
+        !(
+          e.target instanceof HTMLElement &&
+          (e.target.closest('input, textarea, select') ||
+            e.target.isContentEditable)
+        )
+      ) {
+        e.preventDefault()
+        searchRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', shortcut)
+    return () => document.removeEventListener('keydown', shortcut)
   }, [])
 
-  useEffect(() => {
-    void load()
-  }, [load])
-
-  useEffect(() => {
-    const id = window.setInterval(() => void load(), 10_000)
-    return () => window.clearInterval(id)
-  }, [load])
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return sensors
-    return sensors.filter((s) =>
-      JSON.stringify(s).toLowerCase().includes(q),
-    )
-  }, [sensors, search])
-
-  const mySensors = useMemo(
-    () => filtered.filter((s) => s.uid === user?.username),
-    [filtered, user],
-  )
-  const otherSensors = useMemo(
-    () => filtered.filter((s) => s.uid !== user?.username),
-    [filtered, user],
-  )
-
-  const mapSensors: MapSensor[] = useMemo(() => {
-    const out: MapSensor[] = []
-    for (const s of sensors) {
-      const c = coordsOf(s)
-      if (!c || s.serial === undefined) continue
-      // EsLeafletMap reads position.latitude/longitude
-      out.push({
-        ...s,
-        position: { ...(s.position ?? {}), latitude: c.lat, longitude: c.lon },
-      })
-    }
-    return out
-  }, [sensors])
-
-  const statusRows = statusDialog
-    ? statusMap[String(statusDialog.serial)]
-    : undefined
+  const selectFilter = (next: typeof filter) => {
+    setFilter(next)
+    setSelectedSerial(null)
+  }
 
   return (
-    <div className="container-fluid">
-      <div className="row">
-        <div
-          className="col-xs-4 col-md-5 sensors-map-col"
-          style={{ position: 'fixed', height: '100%' }}
-        >
-          <EsLeafletMap
-            sensors={mapSensors}
-            scrolling
-            height="100%"
-            onSelect={(serial) => {
-              const found = sensors.find((s) => String(s.serial) === serial)
-              setSelected(found ?? null)
-            }}
+    <div className="lx-explorer">
+      <WorkspaceHeading
+        eyebrow="THE NETWORK, UP CLOSE"
+        title="Find your perspective."
+        description="A distributed network of sensors. One shared view of the spectrum."
+      >
+        <Link to="/sensors/add" className="lx-button lx-button-primary">
+          <span aria-hidden="true">+</span> Add a sensor
+        </Link>
+      </WorkspaceHeading>
+      <div className="lx-explorer-toolbar">
+        <div className="lx-search">
+          <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+          <input
+            ref={searchRef}
+            type="search"
+            aria-label="Search sensors"
+            placeholder="Search name, location or serial…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
           />
+          <kbd>/</kbd>
         </div>
-
-        <div className="col-xs-4 col-md-5" />
-
-        <div className="col-xs-8 col-md-7" style={{ zoom: 0.9 }}>
-          <div className="row">
-            <div className="col-sm-9">
-              <Link to="/sensors/add" className="btn btn-success btn-sm">
-                <span className="glyphicon glyphicon-plus-sign" />
-                &nbsp;Add Sensor
-              </Link>
-            </div>
-            <div className="col-sm-3">
-              <div className="input-group input-group-sm">
-                <span className="input-group-addon">
-                  <span className="glyphicon glyphicon-search" />
-                </span>
-                <input
-                  type="search"
-                  className="form-control"
-                  placeholder="Search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          {!isAdmin && (
-            <>
-              <div className="row">
-                <div className="col-sm-12">
-                  <h2>My Sensors</h2>
-                  <table className="table table-striped table-condensed table-pointer" width="100%">
-                    <thead>
-                      <tr>
-                        <th>Serial</th>
-                        <th>Name</th>
-                        <th>Position</th>
-                        <th>Deployed</th>
-                        <th>Status</th>
-                        <th>Last Status</th>
-                        <th />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mySensors.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="text-center">
-                            No items
-                          </td>
-                        </tr>
-                      ) : (
-                        mySensors.map((s) => (
-                          <tr key={String(s.serial)} style={{ cursor: 'pointer' }}>
-                            <td onClick={() => setSelected(s)}>{s.serial}</td>
-                            <td onClick={() => setSelected(s)}>{s.name}</td>
-                            <td onClick={() => setSelected(s)}>
-                              <PositionBadge sensor={s} short />
-                            </td>
-                            <td onClick={() => setSelected(s)}>{fmtDate(s.deployed)}</td>
-                            <td onClick={() => setStatusDialog(s)}>
-                              <StatusLabel sensor={s} controller={statusMap[String(s.serial)]} />
-                            </td>
-                            <td onClick={() => setSelected(s)}>
-                              <LastStatusCell sensor={s} />
-                            </td>
-                            <td className="text-right">
-                              <Link to={`/sensors/${s.id}`} className="btn btn-default btn-xs" title="Edit Sensor">
-                                <span className="glyphicon glyphicon-edit" />
-                              </Link>{' '}
-                              <Link
-                                to={`/specmon?sensor=${s.serial}`}
-                                className="btn btn-primary btn-xs"
-                                title="Show Spectrum"
-                              >
-                                <span className="glyphicon glyphicon-signal" />
-                              </Link>{' '}
-                              <Link
-                                to={`/spectrum-decoder?sensor=${s.serial}`}
-                                className="btn btn-xs"
-                                style={{ backgroundColor: '#7b3fb5', color: '#fff' }}
-                                title="Open Spectrum Decoder"
-                              >
-                                <span className="glyphicon glyphicon-headphones" />
-                              </Link>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="row">
-                <div className="col-sm-12">
-                  <h2>Other Sensors</h2>
-                  <table className="table table-striped table-condensed table-pointer" width="100%">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Position</th>
-                        <th>Deployed</th>
-                        <th>Status</th>
-                        <th>Last Status</th>
-                        <th />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {otherSensors.map((s) => (
-                        <tr key={String(s.serial)} style={{ cursor: 'pointer' }}>
-                          <td onClick={() => setSelected(s)}>{s.name}</td>
-                          <td onClick={() => setSelected(s)}>
-                            <PositionBadge sensor={s} />
-                          </td>
-                          <td onClick={() => setSelected(s)}>{fmtDate(s.deployed)}</td>
-                          <td onClick={() => setStatusDialog(s)}>
-                            <StatusLabel sensor={s} controller={statusMap[String(s.serial)]} />
-                          </td>
-                          <td onClick={() => setSelected(s)}>
-                            <LastStatusCell sensor={s} />
-                          </td>
-                          <td className="text-right" style={{ whiteSpace: 'nowrap' }}>
-                            <Link
-                              to={`/specmon?sensor=${s.serial}`}
-                              className="btn btn-primary btn-xs"
-                              title="Show Spectrum"
-                            >
-                              <span className="glyphicon glyphicon-signal" />
-                              &nbsp;Spectrum
-                            </Link>{' '}
-                            <Link
-                              to={`/spectrum-decoder?sensor=${s.serial}`}
-                              className="btn btn-xs"
-                              style={{ backgroundColor: '#7b3fb5', color: '#fff' }}
-                              title="Open Spectrum Decoder"
-                            >
-                              <span className="glyphicon glyphicon-headphones" />
-                              &nbsp;Decoder
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
-          )}
-
-          {isAdmin && (
-            <div className="row">
-              <div className="col-sm-12">
-                <table className="table table-striped table-condensed table-pointer" width="100%">
-                  <thead>
-                    <tr>
-                      <th>Serial</th>
-                      <th>Name</th>
-                      <th>Operator</th>
-                      <th>Position</th>
-                      <th>Deployed</th>
-                      <th>F/W</th>
-                      <th>Status</th>
-                      <th>Last Status</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((s) => (
-                      <tr key={String(s.serial)} style={{ cursor: 'pointer' }}>
-                        <td onClick={() => setSelected(s)}>{s.serial}</td>
-                        <td onClick={() => setSelected(s)}>{s.name}</td>
-                        <td onClick={() => setSelected(s)}>
-                          <span title={s.operator ?? undefined}>{s.uid}</span>
-                        </td>
-                        <td onClick={() => setSelected(s)}>
-                          <PositionBadge sensor={s} />
-                        </td>
-                        <td onClick={() => setSelected(s)}>{fmtDate(s.deployed)}</td>
-                        <td onClick={() => setSelected(s)}>
-                          {statusMap[String(s.serial)]?.SoftwareInfo?.ElectrosensePackage ?? ''}
-                        </td>
-                        <td onClick={() => setStatusDialog(s)}>
-                          <StatusLabel sensor={s} controller={statusMap[String(s.serial)]} />
-                        </td>
-                        <td onClick={() => setSelected(s)}>
-                          <LastStatusCell sensor={s} />
-                        </td>
-                        <td className="text-right">
-                          <Link to={`/sensors/${s.id}`} className="btn btn-default btn-xs" title="Edit Sensor">
-                            <span className="glyphicon glyphicon-edit" />
-                          </Link>{' '}
-                          <Link
-                            to={`/specmon?sensor=${s.serial}`}
-                            className="btn btn-primary btn-xs"
-                            title="Show Spectrum"
-                          >
-                            <span className="glyphicon glyphicon-signal" />
-                          </Link>{' '}
-                          <Link
-                            to={`/spectrum-decoder?sensor=${s.serial}`}
-                            className="btn btn-xs"
-                            style={{ backgroundColor: '#7b3fb5', color: '#fff' }}
-                            title="Open Spectrum Decoder"
-                          >
-                            <span className="glyphicon glyphicon-headphones" />
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+        <div className="lx-segment" role="group" aria-label="Filter sensors">
+          <button
+            type="button"
+            aria-pressed={filter === 'all'}
+            onClick={() => selectFilter('all')}
+          >
+            All <span>{sensors.length}</span>
+          </button>
+          <button
+            type="button"
+            aria-pressed={filter === 'sensing'}
+            onClick={() => selectFilter('sensing')}
+          >
+            Sensing <span>{sensing}</span>
+          </button>
+          <button
+            type="button"
+            aria-pressed={filter === 'mine'}
+            onClick={() => selectFilter('mine')}
+          >
+            My sensors
+          </button>
         </div>
       </div>
-
-      {statusDialog && statusRows && (
-        <div
-          className="modal-backdrop-custom"
-          onClick={() => setStatusDialog(null)}
-        >
-          <div className="modal-dialog-custom" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="modal-title">Administrative Details</h3>
-            </div>
-            <div className="modal-body">
-              <h4>Status</h4>
-              <table className="table table-condensed">
-                <tbody>
-                  {Object.entries(statusRows).map(([k, v]) => (
-                    <tr key={k}>
-                      <td>
-                        <strong>{k}</strong>
-                      </td>
-                      <td>{v === null || v === undefined ? '' : String(v)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <h4>Information</h4>
-              <table className="table table-condensed">
-                <tbody>
-                  {Object.entries(statusDialog).map(([k, v]) => (
-                    <tr key={k}>
-                      <td>
-                        <strong>{k}</strong>
-                      </td>
-                      <td>
-                        {v === null || v === undefined
-                          ? ''
-                          : typeof v === 'object'
-                            ? JSON.stringify(v)
-                            : String(v)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="modal-footer">
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={() => setStatusDialog(null)}
-              >
-                OK
-              </button>
-            </div>
-          </div>
+      {status === 'error' && (
+        <div className="lx-notice" role="alert">
+          Could not refresh the sensor network.{' '}
+          <button
+            type="button"
+            onClick={() => {
+              setStatus('loading')
+              setAttempt((n) => n + 1)
+            }}
+          >
+            Try again
+          </button>
         </div>
       )}
+      <div className="lx-explorer-grid">
+        <section className="lx-sensor-list-panel" aria-label="Sensor results">
+          <div className="lx-panel-topline">
+            <span aria-live="polite">
+              {status === 'loading'
+                ? 'Loading sensors…'
+                : `${filtered.length} sensor${filtered.length === 1 ? '' : 's'} found`}
+            </span>
+            <i className="fa-solid fa-list-ul" aria-hidden="true" />
+          </div>
+          <div className="lx-sensor-results">
+            {filtered.map((s) => (
+              <button
+                type="button"
+                key={String(s.serial)}
+                aria-pressed={String(s.serial) === String(selected?.serial)}
+                onClick={() => setSelectedSerial(String(s.serial))}
+                className="lx-sensor-result"
+              >
+                <div className="lx-result-top">
+                  <span className="lx-sensor-symbol">
+                    <i
+                      className="fa-solid fa-tower-broadcast"
+                      aria-hidden="true"
+                    />
+                  </span>
+                  <span
+                    className={`lx-status-pill${s.sensing ? ' is-sensing' : ''}`}
+                  >
+                    <span />
+                    {s.sensing ? 'Sensing' : 'Offline'}
+                  </span>
+                </div>
+                <strong>{s.name ?? `Sensor ${s.serial}`}</strong>
+                <span>{s.country ?? s.address ?? 'Location not provided'}</span>
+                <small>
+                  <span>#{s.serial}</span>
+                  <span aria-hidden="true">↗</span>
+                </small>
+              </button>
+            ))}
+            {status !== 'loading' && !filtered.length && (
+              <div className="lx-empty">
+                <i className="fa-solid fa-binoculars" aria-hidden="true" />
+                <h3>No sensors found.</h3>
+                <p>Try a different search or explore the full network.</p>
+                <button
+                  type="button"
+                  className="lx-button"
+                  onClick={() => {
+                    setQuery('')
+                    selectFilter('all')
+                  }}
+                >
+                  Clear filters
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+        <section
+          className="lx-map-panel lx-explorer-map"
+          aria-label="Sensor locations"
+        >
+          <div className="lx-panel-topline">
+            <span>
+              <span className="lx-pulse-dot" />{' '}
+              {isPreview ? 'Sample sensor network' : 'Sensor network'}
+            </span>
+            <span className="lx-mini-label">SELECT A MARKER TO EXPLORE</span>
+          </div>
+          <LeafletMap
+            markers={markers}
+            fitToMarkers
+            selectedId={selected ? String(selected.serial) : undefined}
+            height={420}
+            onMarkerClick={(m) => setSelectedSerial(String(m.id))}
+          />
+          <div className="lx-map-caption">
+            <span>
+              {markers.length} of {filtered.length} sensors have a reported
+              location
+            </span>
+            <span>© OpenStreetMap contributors</span>
+          </div>
+        </section>
+      </div>
+      {selected && (
+        <section
+          className="lx-sensor-detail"
+          aria-labelledby="selected-sensor-heading"
+        >
+          <div className="lx-detail-intro">
+            <p className="lx-eyebrow">SELECTED SENSOR</p>
+            <h2 id="selected-sensor-heading">
+              {selected.name ?? selected.serial}
+            </h2>
+            <span
+              className={`lx-status-pill${selected.sensing ? ' is-sensing' : ''}`}
+            >
+              <span />
+              {selected.sensing ? 'Sensing' : 'Offline'}
+            </span>
+          </div>
+          <dl className="lx-detail-facts">
+            <div>
+              <dt>Location</dt>
+              <dd>{selected.country ?? 'Not provided'}</dd>
+            </div>
+            <div>
+              <dt>Coordinates</dt>
+              <dd>
+                {position
+                  ? `${position[0].toFixed(3)}°, ${position[1].toFixed(3)}°`
+                  : 'Not provided'}
+              </dd>
+            </div>
+            <div>
+              <dt>Hardware</dt>
+              <dd>{selected.model ?? selected.type ?? 'Not provided'}</dd>
+            </div>
+            <div>
+              <dt>Environment</dt>
+              <dd>
+                {selected.position?.indoor == null
+                  ? 'Not provided'
+                  : selected.position.indoor
+                    ? 'Indoor'
+                    : 'Outdoor'}
+              </dd>
+            </div>
+          </dl>
+          <div className="lx-detail-actions">
+            <Link
+              className="lx-button lx-button-primary"
+              to={`/specmon?sensor=${encodeURIComponent(String(selected.serial))}`}
+            >
+              View spectrum <span aria-hidden="true">↗</span>
+            </Link>
+            <Link
+              className="lx-button"
+              to={`/specmon?view=map&sensor=${encodeURIComponent(String(selected.serial))}`}
+            >
+              Spatial view
+            </Link>
+            <Link
+              className="lx-text-link"
+              to={`/spectrum-decoder?sensor=${encodeURIComponent(String(selected.serial))}`}
+            >
+              Open decoder <span aria-hidden="true">↗</span>
+            </Link>
+            {(isAdmin || selected.uid === user?.username) && (
+              <Link className="lx-text-link" to={`/sensors/${selected.id}`}>
+                Edit sensor
+              </Link>
+            )}
+          </div>
+          {selectedStatus && (
+            <details className="lx-technical-details">
+              <summary>Sensor & controller details</summary>
+              <pre>
+                {JSON.stringify(
+                  { sensor: selected, controller: selectedStatus },
+                  null,
+                  2,
+                )}
+              </pre>
+            </details>
+          )}
+        </section>
+      )}
+      <div className="lx-explorer-footnote">
+        <span>
+          Sensor status refreshes every 10 seconds.
+          {isPreview && ' All sensors shown are illustrative sample data.'}
+        </span>
+        <Link to="/sensors/manage">
+          Advanced sensor management <span aria-hidden="true">↗</span>
+        </Link>
+      </div>
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { CHART_BACKGROUND, CHART_GRID, CHART_TEXT } from './chartTheme'
 import { useEffect, useRef } from 'react'
 import { printHzUnit } from '../../lib/spectrum'
 import type { RowData } from './waterfallEngine'
@@ -79,11 +80,16 @@ export function EsBarPlot({ data, ylim, selFreq, onSelect }: Props) {
     const canvas = canvasRef.current
     if (!layout || !canvas) return
     const rect = canvas.getBoundingClientRect()
-    const x = Math.floor((e.clientX - (rect.left + layout.plotX0)) / layout.resolution[0])
+    const x = Math.floor(
+      (e.clientX - (rect.left + layout.plotX0)) / layout.resolution[0],
+    )
     const d = layout.data
     if (x >= 0 && d.values.length > x) {
       const v = d.values[x]
-      onSelectRef.current(d.startFreq + x * d.freqRes, typeof v === 'number' ? v : null)
+      onSelectRef.current(
+        d.startFreq + x * d.freqRes,
+        typeof v === 'number' ? v : null,
+      )
       highlightColumn(canvas, bgRef.current!, layout, x)
     }
   }
@@ -110,12 +116,17 @@ function highlightColumn(
 ) {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
-  ctx.fillStyle = '#ffffff'
+  ctx.fillStyle = CHART_BACKGROUND
   ctx.fillRect(0, 0, canvas.width, canvas.height)
   ctx.drawImage(bg, 0, 0)
   ctx.save()
   ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
-  ctx.fillRect(layout.plotX0 + x * layout.resolution[0], layout.plotY0, layout.resolution[0], layout.plotHeight)
+  ctx.fillRect(
+    layout.plotX0 + x * layout.resolution[0],
+    layout.plotY0,
+    layout.resolution[0],
+    layout.plotHeight,
+  )
   ctx.restore()
 }
 
@@ -135,7 +146,7 @@ function drawSpectrum(
   const width = canvas.width
   const height = canvas.height
 
-  ctx.fillStyle = '#ffffff'
+  ctx.fillStyle = CHART_BACKGROUND
   ctx.fillRect(0, 0, width, height)
   ctx.font = `${FONT_SIZE}px Verdana`
   const ylim: [number, number] = [Math.ceil(ylimIn[0]), Math.ceil(ylimIn[1])]
@@ -145,7 +156,8 @@ function drawSpectrum(
     maxTickSize = ctx.measureText(String(ylim[1]))
   }
 
-  const plotX0 = FONT_SIZE + SPACER + maxTickSize.width + SPACER + 10 + OFFSET_LEFT
+  const plotX0 =
+    FONT_SIZE + SPACER + maxTickSize.width + SPACER + 10 + OFFSET_LEFT
   const plotWidth = width - plotX0 - 5
   const plotY0 = SPACER
   let plotHeight = height - plotY0 - SPACER_BOTTOM
@@ -158,7 +170,7 @@ function drawSpectrum(
   ctx.clearRect(0, 0, width, height)
   bgCtx.clearRect(0, 0, width, height)
 
-  ctx.fillStyle = '#000000'
+  ctx.fillStyle = CHART_TEXT
   ctx.save()
   ctx.translate(SPACER, height / 2)
   ctx.rotate(-Math.PI / 2)
@@ -167,7 +179,7 @@ function drawSpectrum(
   ctx.restore()
 
   // y ticks every 5 dB when the range exceeds 5 dB, otherwise every dB
-  ctx.strokeStyle = '#000000'
+  ctx.strokeStyle = CHART_TEXT
   ctx.lineWidth = 1
   let i = -1
   for (let cl = ylim[1]; cl >= Math.max(0, ylim[0]); cl--) {
@@ -175,16 +187,27 @@ function drawSpectrum(
     if (ylim[1] - ylim[0] > 5 && cl % 5 !== 0) continue
     const ts = ctx.measureText(String(cl))
     const extraOffset = Math.abs(ts.width - maxTickSize.width)
-    const yPos = SPACER + 0.5 * FONT_SIZE + i * resolution[1] - resolution[1] / 2
-    ctx.fillText(String(cl), OFFSET_LEFT + FONT_SIZE + 2 * SPACER + extraOffset, yPos + FONT_SIZE / 2 - 1)
+    const yPos =
+      SPACER + 0.5 * FONT_SIZE + i * resolution[1] - resolution[1] / 2
+    ctx.fillText(
+      String(cl),
+      OFFSET_LEFT + FONT_SIZE + 2 * SPACER + extraOffset,
+      yPos + FONT_SIZE / 2 - 1,
+    )
 
     ctx.beginPath()
-    ctx.moveTo(OFFSET_LEFT + FONT_SIZE + 2 * SPACER + maxTickSize.width + 2, yPos)
-    ctx.lineTo(OFFSET_LEFT + FONT_SIZE + 3 * SPACER + maxTickSize.width + 2, yPos)
+    ctx.moveTo(
+      OFFSET_LEFT + FONT_SIZE + 2 * SPACER + maxTickSize.width + 2,
+      yPos,
+    )
+    ctx.lineTo(
+      OFFSET_LEFT + FONT_SIZE + 3 * SPACER + maxTickSize.width + 2,
+      yPos,
+    )
     ctx.stroke()
 
     ctx.save()
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)'
+    ctx.strokeStyle = CHART_GRID
     ctx.beginPath()
     ctx.moveTo(plotX0, yPos)
     ctx.lineTo(plotX0 + plotWidth, yPos)
@@ -200,15 +223,19 @@ function drawSpectrum(
 
   ctx.beginPath()
   ctx.moveTo(plotX0 + resolution[0] / 2, plotY0 + plotHeight + 2)
-  ctx.lineTo(plotWidth + plotX0 - resolution[0] / 2 - 1, plotY0 + plotHeight + 2)
+  ctx.lineTo(
+    plotWidth + plotX0 - resolution[0] / 2 - 1,
+    plotY0 + plotHeight + 2,
+  )
   ctx.stroke()
 
-  ctx.fillStyle = '#000000'
+  ctx.fillStyle = CHART_TEXT
   let lastX: number | null = null
   for (let k = 0; k < data.values.length; k++) {
     const cFreq = printHzUnit(data.startFreq + k * data.freqRes, 6)
     const ts = ctx.measureText(cFreq)
-    const center = plotX0 + k * resolution[0] + resolution[0] / 2 + k * BAR_SPACING
+    const center =
+      plotX0 + k * resolution[0] + resolution[0] / 2 + k * BAR_SPACING
     const xPos = center - ts.width / 2
     if ((lastX != null && lastX + 3 > xPos) || xPos + ts.width > width) continue
     ctx.beginPath()
@@ -220,7 +247,11 @@ function drawSpectrum(
   }
 
   const lab = ctx.measureText('Frequency')
-  ctx.fillText('Frequency', plotX0 + plotWidth / 2 - lab.width / 2, plotY0 + plotHeight + 2 * SPACER + 2 * FONT_SIZE + 2)
+  ctx.fillText(
+    'Frequency',
+    plotX0 + plotWidth / 2 - lab.width / 2,
+    plotY0 + plotHeight + 2 * SPACER + 2 * FONT_SIZE + 2,
+  )
 
   const gradient = ctx.createLinearGradient(0, 0, 0, plotHeight)
   gradient.addColorStop(0.72, '#000000')

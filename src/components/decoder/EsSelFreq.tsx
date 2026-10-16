@@ -20,25 +20,39 @@ type Props = {
   nested?: boolean
 }
 
-const unknownOption = (unit: number) => `? number:${unit} ?`
-
 /** Port of the es-sel-freq component: a number field plus a Hz/kHz/MHz/GHz unit select. */
-export function EsSelFreq({ defaultUnit, selectedFrequency, isDisabled, onChange, nested }: Props) {
-  const [selectedUnit, setSelectedUnit] = useState<string | number>(defaultUnit)
-  const [fieldValue, setFieldValue] = useState(() => String(selectedFrequency / Number(defaultUnit)))
+export function EsSelFreq({
+  defaultUnit,
+  selectedFrequency,
+  isDisabled,
+  onChange,
+  nested,
+}: Props) {
+  const [selectedUnit, setSelectedUnit] = useState<string | number>(
+    String(defaultUnit),
+  )
+  const [fieldValue, setFieldValue] = useState(() =>
+    String(selectedFrequency / Number(defaultUnit)),
+  )
   const internal = useRef(selectedFrequency)
+  const lastDefault = useRef(String(defaultUnit))
 
   // a change from outside resets the unit to the default and re-derives the field
   useEffect(() => {
-    if (internal.current === selectedFrequency) return
+    if (
+      internal.current === selectedFrequency &&
+      lastDefault.current === String(defaultUnit)
+    )
+      return
+    lastDefault.current = String(defaultUnit)
     internal.current = selectedFrequency
-    setSelectedUnit(defaultUnit)
+    setSelectedUnit(String(defaultUnit))
     setFieldValue(String(selectedFrequency / Number(defaultUnit)))
   }, [selectedFrequency, defaultUnit])
 
   function update(unit: string | number, field: string) {
     const freq = parseInt(String(unit), 10) * Number(field)
-    if (!Number.isFinite(freq)) return
+    if (!field.trim() || !Number.isFinite(freq) || freq < 0) return
     internal.current = freq
     onChange(freq)
   }
@@ -46,7 +60,10 @@ export function EsSelFreq({ defaultUnit, selectedFrequency, isDisabled, onChange
   const content: ReactNode = (
     <>
       <input
-        type="text"
+        type="number"
+        aria-label="Center frequency"
+        min={0}
+        step="any"
         className="form-control input-sm"
         value={fieldValue}
         disabled={isDisabled}
@@ -57,15 +74,15 @@ export function EsSelFreq({ defaultUnit, selectedFrequency, isDisabled, onChange
       />{' '}
       <select
         name="selected-unit"
+        aria-label="Frequency unit"
         className="form-control input-sm"
-        value={typeof selectedUnit === 'number' ? unknownOption(selectedUnit) : selectedUnit}
+        value={String(selectedUnit)}
         disabled={isDisabled}
         onChange={(e) => {
           setSelectedUnit(e.target.value)
           update(e.target.value, fieldValue)
         }}
       >
-        {typeof selectedUnit === 'number' ? <option value={unknownOption(selectedUnit)} /> : null}
         <option value="1">Hz</option>
         <option value="1000">kHz</option>
         <option value="1000000">MHz</option>
@@ -79,7 +96,8 @@ export function EsSelFreq({ defaultUnit, selectedFrequency, isDisabled, onChange
       <div
         className="form form-inline"
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && e.target instanceof HTMLInputElement) e.preventDefault()
+          if (e.key === 'Enter' && e.target instanceof HTMLInputElement)
+            e.preventDefault()
         }}
       >
         {content}

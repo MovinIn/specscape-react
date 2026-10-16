@@ -1,3 +1,5 @@
+import { isPreview } from '../config/navigation'
+import { downloadSampleIq } from '../lib/previewDownloads'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import type { Sensor } from '../api/types'
@@ -18,7 +20,8 @@ const UNITS = ['bytes', 'KB', 'MB', 'GB', 'TB', 'PB']
 
 /** Exact port of `filesize` filter in iq-datasets.js. */
 function filesize(bytes: number | undefined): string {
-  if (bytes == null || Number.isNaN(bytes) || !Number.isFinite(bytes)) return '?'
+  if (bytes == null || Number.isNaN(bytes) || !Number.isFinite(bytes))
+    return '?'
   let unit = 0
   let b = bytes
   while (b >= 1024) {
@@ -28,7 +31,10 @@ function filesize(bytes: number | undefined): string {
   return `${b.toFixed(0)} ${UNITS[unit]}`
 }
 
-function formatDate(value: string | number | null | undefined, withMs: boolean): string {
+function formatDate(
+  value: string | number | null | undefined,
+  withMs: boolean,
+): string {
   if (value == null) return ''
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return ''
@@ -117,22 +123,27 @@ export default function IqDatasetsPage() {
       <div className="row">
         <div className="col-sm-12">
           <h1>IQ Data Sets</h1>
+          {isPreview && (
+            <div className="alert alert-info" role="status">
+              Sample recordings · downloads contain locally generated I/Q for
+              testing the two file formats.
+            </div>
+          )}
 
           <p>
-            Here you can find all accessible I/Q measurements for your
-            sensors. You can download them in two different formats:
+            Here you can find all accessible I/Q measurements for your sensors.
+            You can download them in two different formats:
           </p>
           <ul>
             <li>
-              <strong>Avro</strong> - contains meta-information and
-              measurement data. Avro is a widely-used binary serialization
-              format which became popular within the Hadoop eco-system.
+              <strong>Avro</strong> - contains meta-information and measurement
+              data. Avro is a widely-used binary serialization format which
+              became popular within the Hadoop eco-system.
             </li>
             <li>
-              <strong>Raw</strong> - contains only I/Q samples as a sequence
-              of 32bit float values (little endian). If your processing
-              pipeline or analysis tool cannot deal with Avro, this might be
-              a good fit.
+              <strong>Raw</strong> - contains only I/Q samples as a sequence of
+              32bit float values (little endian). If your processing pipeline or
+              analysis tool cannot deal with Avro, this might be a good fit.
             </li>
           </ul>
 
@@ -164,7 +175,9 @@ export default function IqDatasetsPage() {
               >
                 <span
                   className={`glyphicon ${
-                    !collapsed ? 'glyphicon-chevron-down' : 'glyphicon-chevron-right'
+                    !collapsed
+                      ? 'glyphicon-chevron-down'
+                      : 'glyphicon-chevron-right'
                   }`}
                 />
                 &nbsp;
@@ -244,7 +257,9 @@ export default function IqDatasetsPage() {
                         {m.samplingRate ? (
                           <td>
                             {m.samplingRate >= 1_000_000 ? (
-                              <span>{(m.samplingRate / 1_000_000).toFixed(3)}MS</span>
+                              <span>
+                                {(m.samplingRate / 1_000_000).toFixed(3)}MS
+                              </span>
                             ) : (
                               <span>{m.samplingRate}/s</span>
                             )}
@@ -260,6 +275,12 @@ export default function IqDatasetsPage() {
                           <a
                             className="btn btn-sm btn-default"
                             title="Download as Raw File. Please be patient. The download might need a few seconds to start."
+                            onClick={(event) => {
+                              if (isPreview) {
+                                event.preventDefault()
+                                downloadSampleIq('raw', String(m.id))
+                              }
+                            }}
                             href={`/api/iq/download/raw?serial=${serial}&dataset=${m.id}`}
                             target="_blank"
                             rel="noreferrer"
@@ -270,6 +291,12 @@ export default function IqDatasetsPage() {
                           <a
                             className="btn btn-sm btn-primary"
                             title="Download as Avro"
+                            onClick={(event) => {
+                              if (isPreview) {
+                                event.preventDefault()
+                                downloadSampleIq('avro', String(m.id))
+                              }
+                            }}
                             href={`/api/iq/download/avro?serial=${serial}&dataset=${m.id}`}
                             target="_blank"
                             rel="noreferrer"

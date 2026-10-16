@@ -1,13 +1,27 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { AggregatedSpectrum, Sensor } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import LeafletMap, { type MapMarker } from '../components/LeafletMap'
+import { WorkspaceHeading } from '../components/WorkspaceHeading'
+import { isPreview } from '../config/navigation'
 import { EsBarPlot } from '../components/specmon/EsBarPlot'
 import { EsWaterfall } from '../components/specmon/EsWaterfall'
-import type { RowData, WaterfallData } from '../components/specmon/waterfallEngine'
+import type {
+  RowData,
+  WaterfallData,
+} from '../components/specmon/waterfallEngine'
 import {
+  averageSpectrumRow,
   extractSpectrumMatrix,
   formatHz,
   printDate,
@@ -21,7 +35,10 @@ import {
  * original occupancy.js, which used a flat 15 dB threshold on the SNR
  * values returned by the API (not a noise-floor-relative one).
  */
-function occupancyPercents(matrix: SpectrumMatrix, thresholdDb: number): number[] {
+function occupancyPercents(
+  matrix: SpectrumMatrix,
+  thresholdDb: number,
+): number[] {
   const cols = matrix[0]?.length ?? 0
   const out: number[] = []
   for (let x = 0; x < cols; x++) {
@@ -56,7 +73,7 @@ function drawOccupancy(canvas: HTMLCanvasElement, percents: number[]) {
   const plotW = cssW - padL - padR
   const plotH = cssH - padT - padB
 
-  ctx.strokeStyle = '#2e6da4'
+  ctx.strokeStyle = '#7852ee'
   ctx.lineWidth = 2
   ctx.beginPath()
   percents.forEach((p, i) => {
@@ -75,7 +92,9 @@ const OCCUPANCY_THRESHOLD_DB = 15
 // Loaded on first use: h3-js reserves 32 MB of memory as soon as it is imported,
 // which time-view users shouldn't pay for.
 const SpecMonMapView = lazy(() =>
-  import('../components/specmon/SpecMonMapView').then((m) => ({ default: m.SpecMonMapView })),
+  import('../components/specmon/SpecMonMapView').then((m) => ({
+    default: m.SpecMonMapView,
+  })),
 )
 
 /** Synthetic map data is centred here when the sensor has no position (demo-zurich). */
@@ -88,14 +107,28 @@ export default function SpecMonPage() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [allSensors, setAllSensors] = useState<Sensor[]>([])
-  const [sensor, setSensor] = useState<{ serial: string; name: string; uid?: string }>({
+  const [sensor, setSensor] = useState<{
+    serial: string
+    name: string
+    uid?: string
+  }>({
     serial: searchParams.get('sensor') ?? '',
     name: '',
   })
   const [senSelDialog, setSenSelDialog] = useState(false)
-  const [view, setView] = useState<SpecMonView>(searchParams.get('view') === 'map' ? 'map' : 'time')
+  const view: SpecMonView = searchParams.get('view') === 'map' ? 'map' : 'time'
+  function setView(next: SpecMonView) {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev)
+      if (next === 'map') params.set('view', 'map')
+      else params.delete('view')
+      return params
+    })
+  }
 
-  const [startTime, setStartTime] = useState(() => new Date(Date.now() - 3600_000))
+  const [startTime, setStartTime] = useState(
+    () => new Date(Date.now() - 3600_000),
+  )
   const [aggFun, setAggFun] = useState<'AVG' | 'MAX'>('AVG')
   const [startFreq, setStartFreq] = useState(20_000_000)
   const [maxFreq, setMaxFreq] = useState(11_800_000_000)
@@ -104,18 +137,25 @@ export default function SpecMonPage() {
 
   const [loading, setLoading] = useState(false)
   const [isError, setIsError] = useState(false)
-  const [statusMessage, setStatusMessage] = useState('Select a sensor and reload.')
+  const [statusMessage, setStatusMessage] = useState(
+    'Select a sensor and reload.',
+  )
   const [retrievalMs, setRetrievalMs] = useState(0)
   const [liveMode, setLiveMode] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
 
   /** The last /spectrum/aggregated response, with its own start/resolution. */
-  const [spec, setSpec] = useState<(WaterfallData & { bands?: AggregatedSpectrum['bands'] }) | null>(null)
+  const [spec, setSpec] = useState<
+    (WaterfallData & { bands?: AggregatedSpectrum['bands'] }) | null
+  >(null)
   const matrix: SpectrumMatrix | null = spec?.values ?? null
   const [barPlotData, setBarPlotData] = useState<RowData | null>(null)
   /** Plot area in pixels, reported by the waterfall; drives the zoom resolution. */
   const [maxNumVals, setMaxNumVals] = useState<[number, number]>([768, 60])
-  const [colorprops, setColorprops] = useState({ median: -5000, high: 4000 })
+  const [colorprops, setColorprops] = useState({
+    median: isPreview ? 0 : -5000,
+    high: 4000,
+  })
 
   const [showBarplot, setShowBarplot] = useState(true)
   const [showOccupancy, setShowOccupancy] = useState(true)
@@ -124,9 +164,43 @@ export default function SpecMonPage() {
   const [selTime, setSelTime] = useState<Date | null>(null)
 
   const occRef = useRef<HTMLCanvasElement>(null)
+  const sensorDialogRef = useRef<HTMLDivElement>(null)
 
-  // Track whether we've already done the initial auto-load so we don't repeat it.
-  const autoLoadedRef = useRef(false)
+  useEffect(() => {
+    if (!senSelDialog) return
+    const previous = document.activeElement as HTMLElement | null
+    const dialog = sensorDialogRef.current
+    dialog?.focus()
+    const keyboard = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSenSelDialog(false)
+      if (event.key !== 'Tab' || !dialog) return
+      const targets = [
+        ...dialog.querySelectorAll<HTMLElement>(
+          'button, a, input, [tabindex="0"]',
+        ),
+      ].filter((el) => el.getClientRects().length)
+      const first = targets[0]
+      const last = targets.at(-1)
+      if (
+        event.shiftKey &&
+        (document.activeElement === first || document.activeElement === dialog)
+      ) {
+        event.preventDefault()
+        last?.focus()
+      } else if (
+        !event.shiftKey &&
+        (document.activeElement === last || document.activeElement === dialog)
+      ) {
+        event.preventDefault()
+        first?.focus()
+      }
+    }
+    document.addEventListener('keydown', keyboard)
+    return () => {
+      document.removeEventListener('keydown', keyboard)
+      previous?.focus()
+    }
+  }, [senSelDialog])
 
   // Load the sensor catalog once, mirroring sen-time-select's initial fetch.
   useEffect(() => {
@@ -208,6 +282,11 @@ export default function SpecMonPage() {
             values: m,
             bands: data.bands,
           })
+          setBarPlotData({
+            startFreq: data.startFreq ?? sf,
+            freqRes: data.freqRes ?? fr,
+            values: averageSpectrumRow(m),
+          })
           setStartFreq(sf)
           setMaxFreq(mf)
           setFreqRes(data.freqRes ?? fr)
@@ -228,7 +307,16 @@ export default function SpecMonPage() {
         setLoading(false)
       }
     },
-    [sensor.serial, startTime, startFreq, maxFreq, freqRes, timeRes, aggFun, matrix],
+    [
+      sensor.serial,
+      startTime,
+      startFreq,
+      maxFreq,
+      freqRes,
+      timeRes,
+      aggFun,
+      matrix,
+    ],
   )
 
   // Live mode: reload every 5s, tracking the last hour.
@@ -255,19 +343,19 @@ export default function SpecMonPage() {
 
   useEffect(() => {
     setSearchParams(
-      {
-        ...(sensor.serial ? { sensor: sensor.serial } : {}),
-        ...(view === 'map' ? { view } : {}),
+      (prev) => {
+        const params = new URLSearchParams(prev)
+        if (sensor.serial) params.set('sensor', sensor.serial)
+        return params
       },
       { replace: true },
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sensor.serial, view])
+  }, [sensor.serial])
 
-  // Auto-load the plot once the sensor serial is first resolved (e.g. from the URL ?sensor= param).
+  // Load measurements when a sensor is resolved or changed in the selector.
   useEffect(() => {
-    if (!sensor.serial || autoLoadedRef.current) return
-    autoLoadedRef.current = true
+    if (!sensor.serial) return
     void load({ startFreq: 0, maxFreq: 11_900_000_000, freqRes: 10_000_000 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sensor.serial])
@@ -337,7 +425,7 @@ export default function SpecMonPage() {
     const cols = matrix?.[0]?.length ?? 0
     if (!cols) return
     const zFac = 3
-    const newStart = startFreq - ((cols / 2) * zFac) * freqRes
+    const newStart = startFreq - (cols / 2) * zFac * freqRes
     const newMax = startFreq + (cols * zFac - zFac) * freqRes
     onZoom(newStart, newMax)
   }
@@ -364,7 +452,12 @@ export default function SpecMonPage() {
     for (const s of allSensors) {
       const lat = Number(s.position?.latitude ?? s.latitude ?? s.lat)
       const lon = Number(s.position?.longitude ?? s.longitude ?? s.lon)
-      if (!Number.isFinite(lat) || !Number.isFinite(lon) || s.serial === undefined) continue
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lon) ||
+        s.serial === undefined
+      )
+        continue
       out.push({
         id: String(s.serial),
         lat,
@@ -380,226 +473,342 @@ export default function SpecMonPage() {
     const s = allSensors.find((a) => String(a.serial) === sensor.serial)
     const lat = Number(s?.position?.latitude ?? s?.latitude ?? s?.lat)
     const lon = Number(s?.position?.longitude ?? s?.longitude ?? s?.lon)
-    return Number.isFinite(lat) && Number.isFinite(lon) ? [lat, lon] : DEFAULT_MAP_CENTER
+    return Number.isFinite(lat) && Number.isFinite(lon)
+      ? [lat, lon]
+      : DEFAULT_MAP_CENTER
   }, [allSensors, sensor.serial])
 
   const viewToggle = (
-    <div className="btn-group btn-group-sm specmon-view-toggle" role="group" aria-label="Spectrum view">
+    <div
+      className="lx-segment lx-view-toggle"
+      role="group"
+      aria-label="Spectrum view"
+    >
       <button
         type="button"
-        className={`btn ${view === 'time' ? 'btn-primary active' : 'btn-default'}`}
         aria-pressed={view === 'time'}
         onClick={() => setView('time')}
       >
-        <i className="glyphicon glyphicon-time" /> Time view
+        <i className="fa-solid fa-wave-square" aria-hidden="true" /> Time &
+        frequency
       </button>
       <button
         type="button"
-        className={`btn ${view === 'map' ? 'btn-primary active' : 'btn-default'}`}
         aria-pressed={view === 'map'}
         onClick={() => {
           setLiveMode(false)
           setView('map')
         }}
       >
-        <i className="glyphicon glyphicon-map-marker" /> Map view
+        <i className="fa-solid fa-layer-group" aria-hidden="true" /> Spatial
+        view <small>LAB</small>
       </button>
     </div>
+  )
+  const heading = (
+    <WorkspaceHeading
+      eyebrow="SPECTRUM INTELLIGENCE"
+      title={
+        view === 'map'
+          ? 'A new dimension of discovery.'
+          : 'Signals, in perspective.'
+      }
+      description={
+        view === 'map'
+          ? 'Explore spectrum across space. Select a hexagon to look closer.'
+          : 'Explore frequency and time. Every measurement tells a story.'
+      }
+    >
+      {viewToggle}
+    </WorkspaceHeading>
   )
 
   if (view === 'map') {
     return (
-      <div className="container-fluid">
-        {viewToggle}
-        <Suspense fallback={<div className="es-loader" />}>
-          <SpecMonMapView center={mapCenter} occupancyThresholdDb={OCCUPANCY_THRESHOLD_DB} />
+      <div className="lx-monitor">
+        {heading}
+        <div className="lx-monitor-context">
+          <span>
+            <span className="lx-pulse-dot" /> Spatial lab
+          </span>
+          <span>
+            Centered on {sensor.name || 'the selected sensor'} · Synthetic
+            mobile measurements
+          </span>
+          <select
+            className="lx-map-center-select"
+            aria-label="Map center sensor"
+            value={sensor.serial}
+            onChange={(event) => {
+              const found = allSensors.find(
+                (item) => String(item.serial) === event.target.value,
+              )
+              if (found)
+                setSensor({
+                  serial: String(found.serial),
+                  name: found.name ?? '',
+                  uid: found.uid,
+                })
+            }}
+          >
+            {sensorOptions(allSensors).map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <Suspense
+          fallback={
+            <div className="lx-empty" role="status">
+              Preparing the spatial workspace…
+            </div>
+          }
+        >
+          <SpecMonMapView
+            key={mapCenter.join(',')}
+            center={mapCenter}
+            occupancyThresholdDb={OCCUPANCY_THRESHOLD_DB}
+          />
         </Suspense>
       </div>
     )
   }
 
   return (
-    <div className="container-fluid">
-      {viewToggle}
+    <div className="lx-monitor">
+      {heading}
+      <div className="lx-monitor-context">
+        <span>
+          <span className="lx-pulse-dot" />{' '}
+          {isPreview
+            ? 'Sample measurements'
+            : liveMode
+              ? 'Auto-refresh enabled'
+              : 'Historical measurements'}
+        </span>
+        <span>
+          {isPreview
+            ? 'Illustrative spectrum data · no hardware connection'
+            : 'Drag to pan · Shift + drag to zoom · Hover to inspect'}
+        </span>
+      </div>
       <div className="row">
         <div className="col-sm-12">
-          {/* controls: sensor/date/time + zoom/aggregation/live-mode bars */}
-          <div className="es-center">
-            <div className="es-sbar">
-              <button
-                type="button"
-                className="btn btn-sm es-left-btn btn-primary"
-                style={{ marginTop: 7 }}
-                title="Toggle Help"
-                onClick={() => setHelpOpen((v) => !v)}
-              >
-                <i className="glyphicon glyphicon-question-sign" />
-              </button>
-
-              <form className="form form-inline es-sbar" style={{ display: 'inline-flex', flexWrap: 'wrap' }}>
-                <label htmlFor="es-vals-sen">Sensor Name</label>
-                <div className="input-group input-group-sm">
-                  <input
-                    id="es-vals-sen"
-                    className="form-control input-sm"
-                    list="specmon-sensors"
-                    value={sensor.name}
-                    onChange={(e) => {
-                      const name = e.target.value
-                      const found = allSensors.find((s) => s.name === name)
-                      setSensor(
-                        found
-                          ? { serial: String(found.serial ?? ''), name: found.name ?? '', uid: found.uid }
-                          : { ...sensor, name },
-                      )
-                    }}
-                    title="Select a sensor by typing its name in the field or click the button to open a map"
-                  />
-                  <datalist id="specmon-sensors">
-                    {sensorOptions(allSensors).map((s) => (
-                      <option key={s.id} value={allSensors.find((a) => String(a.serial) === s.id)?.name ?? s.label} />
-                    ))}
-                  </datalist>
-                  <span className="input-group-btn">
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-default"
-                      onClick={() => setSenSelDialog(true)}
-                    >
-                      <i className="glyphicon glyphicon-map-marker" />
-                    </button>
-                  </span>
-                </div>
-                {' | '}
-                <label htmlFor="es-date">Date</label>
-                <div className="input-group input-group-sm">
-                  <input
-                    id="es-date"
-                    type="date"
-                    className="form-control"
-                    value={startTime.toISOString().slice(0, 10)}
-                    onChange={(e) => {
-                      const [y, m, d] = e.target.value.split('-').map(Number)
-                      const next = new Date(startTime)
-                      next.setFullYear(y, m - 1, d)
-                      setStartTime(next)
-                    }}
-                  />
-                </div>
-                {' | '}
-                <label>Start Time</label>
-                <div className="input-group input-group-sm">
-                  <input
-                    type="time"
-                    className="form-control"
-                    value={`${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`}
-                    onChange={(e) => {
-                      const [h, m] = e.target.value.split(':').map(Number)
-                      const next = new Date(startTime)
-                      next.setHours(h, m, 0, 0)
-                      setStartTime(next)
-                    }}
-                  />
-                </div>
-              </form>
-            </div>
-
-            <div className="es-sbar">
-              <form className="form form-inline esStatusBar">
-                <button
-                  type="button"
-                  disabled={!showZoomOut}
-                  className="btn btn-sm es-left-btn"
-                  title="Zoom Out"
-                  onClick={onZoomOut}
+          <section
+            className="lx-monitor-controls"
+            aria-label="Measurement controls"
+          >
+            <div className="lx-monitor-fields">
+              <label className="lx-field" htmlFor="es-vals-sen">
+                <span>01 / SENSOR</span>
+                <select
+                  id="es-vals-sen"
+                  className="form-control"
+                  value={sensor.serial}
+                  onChange={(e) => {
+                    const found = allSensors.find(
+                      (s) => String(s.serial) === e.target.value,
+                    )
+                    if (found)
+                      setSensor({
+                        serial: String(found.serial),
+                        name: found.name ?? '',
+                        uid: found.uid,
+                      })
+                  }}
                 >
-                  <i className="glyphicon glyphicon-zoom-out" />
-                </button>
-                <button
-                  type="button"
-                  disabled={!canZoomIn()}
-                  className="btn btn-sm es-left-btn"
-                  title="Zoom In"
-                  onClick={onZoomIn}
-                >
-                  <i className="glyphicon glyphicon-zoom-in" />
-                </button>
-                <button
-                  type="button"
-                  disabled={!showZoomOut}
-                  className="btn btn-sm es-left-btn"
-                  title="-freq"
-                  onClick={() => freqShift(-1)}
-                >
-                  <i className="glyphicon glyphicon-chevron-left" />
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-sm es-left-btn"
-                  title="-1h"
-                  onClick={() => load({ startTime: new Date(startTime.getTime() - 3600_000) })}
-                >
-                  <i className="glyphicon glyphicon-chevron-down" />
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-sm es-left-btn"
-                  title="+1h"
-                  onClick={() => load({ startTime: new Date(startTime.getTime() + 3600_000) })}
-                >
-                  <i className="glyphicon glyphicon-chevron-up" />
-                </button>
-                <button
-                  type="button"
-                  disabled={!showZoomOut}
-                  className="btn btn-sm es-left-btn"
-                  title="+freq"
-                  onClick={() => freqShift(1)}
-                >
-                  <i className="glyphicon glyphicon-chevron-right" />
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-sm es-left-btn btn-danger"
-                  title="Reset Plot"
-                  onClick={resetPlot}
-                >
-                  <i className="glyphicon glyphicon-repeat" />
-                  &nbsp;Reset Plot
-                </button>
-
-                {loading && <div className="es-loader pull-left" />}
-
-                <label htmlFor="esHeatAggregateFun">Aggregation</label>
+                  {!allSensors.length && (
+                    <option value="">No sensors available</option>
+                  )}
+                  {sensorOptions(allSensors).map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="lx-field" htmlFor="es-date">
+                <span>02 / DATE</span>
+                <input
+                  id="es-date"
+                  type="date"
+                  className="form-control"
+                  value={`${startTime.getFullYear()}-${String(startTime.getMonth() + 1).padStart(2, '0')}-${String(startTime.getDate()).padStart(2, '0')}`}
+                  onChange={(e) => {
+                    if (!e.target.value) return
+                    const [y, m, d] = e.target.value.split('-').map(Number)
+                    const next = new Date(startTime)
+                    next.setFullYear(y, m - 1, d)
+                    setStartTime(next)
+                  }}
+                />
+              </label>
+              <label className="lx-field" htmlFor="es-start-time">
+                <span>03 / START TIME · LOCAL</span>
+                <input
+                  id="es-start-time"
+                  type="time"
+                  className="form-control"
+                  value={`${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`}
+                  onChange={(e) => {
+                    if (!e.target.value) return
+                    const [h, m] = e.target.value.split(':').map(Number)
+                    const next = new Date(startTime)
+                    next.setHours(h, m, 0, 0)
+                    setStartTime(next)
+                  }}
+                />
+              </label>
+              <label className="lx-field" htmlFor="esHeatAggregateFun">
+                <span>04 / AGGREGATION</span>
                 <select
                   id="esHeatAggregateFun"
-                  className="form-control input-sm"
+                  className="form-control"
                   value={aggFun}
                   onChange={(e) => setAggFun(e.target.value as 'AVG' | 'MAX')}
                 >
-                  <option value="AVG">AVG</option>
-                  <option value="MAX">MAX</option>
+                  <option value="AVG">Average</option>
+                  <option value="MAX">Maximum</option>
                 </select>
-
+              </label>
+              <button
+                type="button"
+                className="lx-button lx-button-primary"
+                disabled={loading || !sensor.serial}
+                onClick={() => load()}
+              >
+                {loading ? 'Loading…' : 'Load spectrum'}{' '}
+                <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+            <div className="lx-plot-toolbar">
+              <div
+                className="lx-plot-tool-group"
+                role="group"
+                aria-label="Frequency navigation"
+              >
                 <button
                   type="button"
-                  className={`btn btn-sm ${liveMode ? 'btn-danger' : 'btn-primary'}`}
+                  className="lx-icon-button"
+                  disabled={!showZoomOut}
+                  aria-label="Zoom out"
+                  title="Zoom out"
+                  onClick={onZoomOut}
+                >
+                  <i className="fa-solid fa-minus" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="lx-icon-button"
+                  disabled={!canZoomIn()}
+                  aria-label="Zoom in"
+                  title="Zoom in"
+                  onClick={onZoomIn}
+                >
+                  <i className="fa-solid fa-plus" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="lx-icon-button"
+                  disabled={!showZoomOut}
+                  aria-label="Lower frequency"
+                  title="Lower frequency"
+                  onClick={() => freqShift(-1)}
+                >
+                  <i className="fa-solid fa-arrow-left" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="lx-icon-button"
+                  disabled={!showZoomOut}
+                  aria-label="Higher frequency"
+                  title="Higher frequency"
+                  onClick={() => freqShift(1)}
+                >
+                  <i className="fa-solid fa-arrow-right" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="lx-toolbar-text"
+                  onClick={resetPlot}
+                >
+                  <i className="fa-solid fa-rotate-left" aria-hidden="true" />{' '}
+                  Reset view
+                </button>
+              </div>
+              <div
+                className="lx-plot-tool-group"
+                role="group"
+                aria-label="Time navigation"
+              >
+                <button
+                  type="button"
+                  className="lx-toolbar-text"
+                  onClick={() =>
+                    load({
+                      startTime: new Date(startTime.getTime() - 3600_000),
+                    })
+                  }
+                >
+                  ← Previous hour
+                </button>
+                <button
+                  type="button"
+                  className="lx-toolbar-text"
+                  onClick={() =>
+                    load({
+                      startTime: new Date(startTime.getTime() + 3600_000),
+                    })
+                  }
+                >
+                  Next hour →
+                </button>
+              </div>
+              <div className="lx-plot-tool-group">
+                <button
+                  type="button"
+                  className={`lx-toolbar-text${liveMode ? ' is-enabled' : ''}`}
+                  aria-pressed={liveMode}
                   onClick={() => setLiveMode((v) => !v)}
                 >
-                  {liveMode ? 'Stop Live Reload' : 'Start Live Reload'}
+                  <span className="lx-pulse-dot" />{' '}
+                  {liveMode ? 'Pause refresh' : 'Auto-refresh'}
                 </button>
-                {!liveMode && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-success"
-                    disabled={loading}
-                    onClick={() => load()}
-                  >
-                    Reload
-                  </button>
-                )}
-              </form>
+                <button
+                  type="button"
+                  className="lx-icon-button"
+                  aria-label="Choose sensor on map"
+                  title="Choose sensor on map"
+                  onClick={() => setSenSelDialog(true)}
+                >
+                  <i
+                    className="fa-solid fa-map-location-dot"
+                    aria-hidden="true"
+                  />
+                </button>
+                <button
+                  type="button"
+                  className="lx-icon-button"
+                  aria-label="Plot help"
+                  title="Plot help"
+                  aria-expanded={helpOpen}
+                  onClick={() => setHelpOpen((v) => !v)}
+                >
+                  <i
+                    className="fa-regular fa-circle-question"
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
             </div>
+          </section>
+          <div className="lx-chart-heading">
+            <h2>Spectrum waterfall</h2>
+            <span>
+              {formatHz(startFreq)} — {formatHz(maxFreq)}{' '}
+              <span aria-hidden="true">/</span> {formatHz(freqRes)} resolution
+            </span>
           </div>
 
           {/* waterfall */}
@@ -630,20 +839,29 @@ export default function SpecMonPage() {
           {/* status bar */}
           <div className="es-sbar">
             <div className="es-msgbox pull-left">{statusMessage}</div>
-            <span title="Time it took to query data from server">Retrieval Time</span>
+            <span title="Time it took to query data from server">
+              Retrieval Time
+            </span>
             <span className="es-sbar-val">{retrievalMs}ms</span>
             Resolution: <span className="es-sbar-val">{formatHz(freqRes)}</span>
             Time{' '}
             <span className="es-sbar-val">
               {selTime ? printDate(selTime) : '—'}
             </span>
-            Frequency <span className="es-sbar-val" style={{ width: '6em' }}>{selFreq != null ? formatHz(selFreq) : '—'}</span>
-            SNR <span className="es-sbar-val" style={{ width: '4.5em' }}>{selSnr != null ? `${selSnr.toFixed(1)}dB` : '—'}</span>
+            Frequency{' '}
+            <span className="es-sbar-val" style={{ width: '6em' }}>
+              {selFreq != null ? formatHz(selFreq) : '—'}
+            </span>
+            SNR{' '}
+            <span className="es-sbar-val" style={{ width: '4.5em' }}>
+              {selSnr != null ? `${selSnr.toFixed(1)}dB` : '—'}
+            </span>
           </div>
 
           <button
             type="button"
             className="btn btn-sm pull-right"
+            aria-expanded={showOccupancy}
             onClick={() => setShowOccupancy((v) => !v)}
           >
             {showOccupancy ? 'Hide' : 'Show'} Occupancy
@@ -653,7 +871,10 @@ export default function SpecMonPage() {
               <h4 style={{ textAlign: 'center', marginTop: 0 }}>Occupancy</h4>
               {occupancy ? (
                 <>
-                  <canvas ref={occRef} style={{ width: '100%', height: 150, display: 'block' }} />
+                  <canvas
+                    ref={occRef}
+                    style={{ width: '100%', height: 150, display: 'block' }}
+                  />
                   <p
                     className="muted"
                     style={{ textAlign: 'center', fontSize: '0.85em' }}
@@ -666,7 +887,9 @@ export default function SpecMonPage() {
                   </p>
                 </>
               ) : (
-                <p className="muted">Occupancy appears after a spectrum fetch.</p>
+                <p className="muted">
+                  Occupancy appears after a spectrum fetch.
+                </p>
               )}
             </div>
           )}
@@ -674,31 +897,43 @@ export default function SpecMonPage() {
           <button
             type="button"
             className="btn btn-sm pull-right"
+            aria-expanded={showBarplot}
             onClick={() => setShowBarplot((v) => !v)}
           >
             {showBarplot ? 'Hide' : 'Show'} Spectrum
           </button>
           {showBarplot && (
-            <EsBarPlot
-              data={barPlotData}
-              ylim={YLIM}
-              selFreq={selFreq}
-              onSelect={(freq, value) => {
-                setSelFreq(freq)
-                setSelSnr(value)
-              }}
-            />
+            <section className="lx-power-spectrum" aria-label="Power spectrum">
+              <div className="lx-chart-heading">
+                <h2>Power spectrum</h2>
+                <span>Mean SNR · hover the waterfall for a time slice</span>
+              </div>
+              <EsBarPlot
+                data={barPlotData}
+                ylim={YLIM}
+                selFreq={selFreq}
+                onSelect={(freq, value) => {
+                  setSelFreq(freq)
+                  setSelSnr(value)
+                }}
+              />
+            </section>
           )}
         </div>
       </div>
 
       {senSelDialog && (
         <div
-          style={{ top: '25%', left: '50%', position: 'absolute', zIndex: 1000 }}
+          ref={sensorDialogRef}
+          tabIndex={-1}
+          className="modal-backdrop-custom lx-sensor-picker"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Choose sensor on map"
         >
           <div
             className="text-left well"
-            style={{ position: 'relative', width: 600, marginLeft: -300, marginTop: -200 }}
+            style={{ width: 680, maxWidth: '100%', margin: 0 }}
           >
             <h3 className="modal-title">Select Sensor</h3>
             <p>Select a marker from the map and click ok</p>
@@ -709,7 +944,9 @@ export default function SpecMonPage() {
                   fitToMarkers
                   height={320}
                   onMarkerClick={(m) => {
-                    const found = allSensors.find((s) => String(s.serial) === String(m.id))
+                    const found = allSensors.find(
+                      (s) => String(s.serial) === String(m.id),
+                    )
                     if (found) {
                       setSensor({
                         serial: String(found.serial ?? ''),
@@ -727,7 +964,7 @@ export default function SpecMonPage() {
                 className="btn btn-danger"
                 onClick={() => setSenSelDialog(false)}
               >
-                Cancel
+                Close
               </button>{' '}
               <button
                 type="button"
@@ -742,7 +979,11 @@ export default function SpecMonPage() {
       )}
 
       {helpOpen && (
-        <div className="alert alert-info" role="status" style={{ margin: '10px 0' }}>
+        <div
+          className="alert alert-info"
+          role="status"
+          style={{ margin: '10px 0' }}
+        >
           Hover the waterfall to inspect a value and see that minute&apos;s
           spectrum below. Drag the waterfall to move in frequency and time,
           Shift+drag to zoom into a frequency range, or hold Ctrl while

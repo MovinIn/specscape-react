@@ -7,10 +7,11 @@ import type { Sensor } from '../api/types'
 
 /** Public Mapbox token (set in .env.local) for the legacy es-leaflet-map style. */
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN ?? ''
-const TILES = `https://api.mapbox.com/styles/v1/electrosense/ck37c8r850txw1cqoolb5v136/tiles/256/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`
-const MARKER = (color: string) =>
-  `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${color}.png`
-const ZOOM_AFTER_PAN = 18
+const TILES = MAPBOX_TOKEN
+  ? `https://api.mapbox.com/styles/v1/electrosense/ck37c8r850txw1cqoolb5v136/tiles/256/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`
+  : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+const MARKER = (color: string) => color
+const ZOOM_AFTER_PAN = 12
 
 export type MapSensor = Sensor & { rtcStatus?: string; connected?: boolean }
 
@@ -33,18 +34,33 @@ function markerImage(s: MapSensor, rtc: boolean) {
   return MARKER('blue')
 }
 
-const icon = (url: string) => L.icon({ iconUrl: url, iconSize: [21, 34] })
+const icon = (color: string) =>
+  L.divIcon({
+    className: 'lx-map-marker-wrap',
+    html: `<span class="lx-rtc-marker is-${color}"></span>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  })
 
 /**
  * Port of the es-leaflet-map component as the Spectrum Decoder uses it:
  * clustered markers, no popups (the page passes no `infowindow`), and a
  * click selects the sensor, zooms in and turns its marker yellow.
  */
-export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect, refresh, height = 420 }: Props) {
+export function EsLeafletMap({
+  sensors,
+  rtc = false,
+  scrolling = true,
+  onSelect,
+  refresh,
+  height = 420,
+}: Props) {
   const divRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null)
-  const markersRef = useRef<Record<string, L.Marker & { sensor?: MapSensor }>>({})
+  const markersRef = useRef<Record<string, L.Marker & { sensor?: MapSensor }>>(
+    {},
+  )
   const onSelectRef = useRef(onSelect)
 
   useEffect(() => {
@@ -68,7 +84,12 @@ export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect,
       polygonOptions: { weight: 1, color: '#c5c5c5', fillColor: '#5e9cff' },
     })
     map.addLayer(cluster)
-    L.tileLayer(TILES, { maxZoom: 18 }).addTo(map)
+    L.tileLayer(TILES, {
+      maxZoom: 18,
+      attribution: MAPBOX_TOKEN
+        ? '&copy; Mapbox &copy; OpenStreetMap'
+        : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map)
     mapRef.current = map
     clusterRef.current = cluster
     return () => {
@@ -106,11 +127,17 @@ export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect,
       }
       if (prev) cluster.removeLayer(prev)
 
-      const marker = L.marker([lat, lon], { icon: icon(markerImage(s, rtc)) }) as L.Marker & {
+      const marker = L.marker([lat, lon], {
+        icon: icon(markerImage(s, rtc)),
+        title: s.name ?? serial,
+      }) as L.Marker & {
         sensor?: MapSensor
       }
       marker.sensor = s
       marker.on('click', () => selectSensor(serial))
+      marker.on('add', () =>
+        marker.getElement()?.setAttribute('aria-label', s.name ?? serial),
+      )
       cluster.addLayer(marker)
       current[serial] = marker
     }
@@ -133,13 +160,18 @@ export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect,
       onSelectRef.current?.(serial)
       const m = map!
       const marker = current[serial]
-      if (marker && (!m.getBounds().contains(marker.getLatLng()) || m.getZoom() < 8)) {
+      if (
+        marker &&
+        (!m.getBounds().contains(marker.getLatLng()) || m.getZoom() < 8)
+      ) {
         m.setZoom(ZOOM_AFTER_PAN)
         m.panTo(marker.getLatLng())
       }
       // no info windows on this page: highlight the selection instead
       for (const [s, mk] of Object.entries(current)) {
-        mk.setIcon(icon(s === serial ? MARKER('yellow') : markerImage(mk.sensor!, rtc)))
+        mk.setIcon(
+          icon(s === serial ? MARKER('yellow') : markerImage(mk.sensor!, rtc)),
+        )
       }
     }
   }, [sensors, rtc])
@@ -150,5 +182,15 @@ export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect,
   }, [refresh])
 
   const cssHeight = typeof height === 'number' ? `${height}px` : height
-  return <div ref={divRef} style={{ width: '100%', height: cssHeight, position: 'relative', zIndex: 1 }} />
+  return (
+    <div
+      ref={divRef}
+      style={{
+        width: '100%',
+        height: cssHeight,
+        position: 'relative',
+        zIndex: 1,
+      }}
+    />
+  )
 }

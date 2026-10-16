@@ -2,9 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { cellToBoundary } from 'h3-js'
-import { heatColor, heatGradientCss, type CellStat } from '../../lib/geoSpectrum'
+import { createMapRenderer } from '../../lib/mapRenderer'
+import {
+  heatColor,
+  heatGradientCss,
+  type CellStat,
+} from '../../lib/geoSpectrum'
 
-export type MapTrack = { sensor: string; name: string; points: [number, number][] }
+export type MapTrack = {
+  sensor: string
+  name: string
+  points: [number, number][]
+}
 export type MapSource = { label: string; lat: number; lon: number }
 
 type Props = {
@@ -29,7 +38,8 @@ const ESTIMATED_OPACITY = 0.32
 
 /** Same OSM tiles as LeafletMap; `.h3-map` greys them so the heat colours carry the page. */
 const TILES = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+const ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 
 function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -48,7 +58,12 @@ function BackgroundClick({ onClick }: { onClick: () => void }) {
 }
 
 /** One canvas-rendered polygon per H3 cell. */
-function HexLayer(props: Pick<Props, 'cells' | 'domain' | 'formatValue' | 'describeCell' | 'onSelect'>) {
+function HexLayer(
+  props: Pick<
+    Props,
+    'cells' | 'domain' | 'formatValue' | 'describeCell' | 'onSelect'
+  >,
+) {
   const map = useMap()
   const propsRef = useRef(props)
   useEffect(() => {
@@ -59,7 +74,7 @@ function HexLayer(props: Pick<Props, 'cells' | 'domain' | 'formatValue' | 'descr
   // One renderer for the layer's lifetime. Leaflet keeps a renderer on the map
   // after its paths are removed, so a new one per redraw leaks a canvas the
   // size of the map on every slider move or band change.
-  const [renderer] = useState(() => L.canvas({ padding: 0.1 }))
+  const [renderer] = useState(() => createMapRenderer({ padding: 0.1 }))
 
   useEffect(() => {
     const group = L.featureGroup()
@@ -84,7 +99,9 @@ function HexLayer(props: Pick<Props, 'cells' | 'domain' | 'formatValue' | 'descr
       const p = propsRef.current
       tip
         .setLatLng(e.latlng)
-        .setContent(`<strong>${escapeHtml(p.formatValue(c.value))}</strong><br/>${escapeHtml(p.describeCell(c))}`)
+        .setContent(
+          `<strong>${escapeHtml(p.formatValue(c.value))}</strong><br/>${escapeHtml(p.describeCell(c))}`,
+        )
       if (!map.hasLayer(tip)) map.openTooltip(tip)
     })
     group.on('mouseout', () => map.closeTooltip(tip))
@@ -134,7 +151,12 @@ function TrackLayer({ tracks }: { tracks: MapTrack[] }) {
     const group = L.layerGroup()
     for (const t of tracks) {
       if (!t.points.length) continue
-      L.polyline(t.points, { color: '#444', weight: 1.5, opacity: 0.55, interactive: false }).addTo(group)
+      L.polyline(t.points, {
+        color: '#444',
+        weight: 1.5,
+        opacity: 0.55,
+        interactive: false,
+      }).addTo(group)
       // Where the sensor is at the end of the selected window.
       L.circleMarker(t.points[t.points.length - 1], {
         radius: 6,
@@ -159,7 +181,13 @@ function SourceLayer({ sources }: { sources: MapSource[] }) {
   useEffect(() => {
     const group = L.layerGroup()
     for (const s of sources) {
-      L.circleMarker([s.lat, s.lon], { radius: 5, color: '#1d4f91', weight: 2, fillColor: '#fff', fillOpacity: 1 })
+      L.circleMarker([s.lat, s.lon], {
+        radius: 5,
+        color: '#1d4f91',
+        weight: 2,
+        fillColor: '#fff',
+        fillOpacity: 1,
+      })
         .bindTooltip(escapeHtml(s.label), { direction: 'top', offset: [0, -6] })
         .addTo(group)
     }
@@ -185,20 +213,39 @@ function FitToTracks({ tracks }: { tracks: MapTrack[] }) {
   return null
 }
 
-function Legend({ domain, title, formatValue }: { domain: [number, number]; title: string; formatValue: (v: number) => string }) {
+function Legend({
+  domain,
+  title,
+  formatValue,
+}: {
+  domain: [number, number]
+  title: string
+  formatValue: (v: number) => string
+}) {
   const [lo, hi] = domain
   return (
     <div className="h3-legend">
       <div className="h3-legend-title">{title}</div>
-      <div className="h3-legend-bar" style={{ background: heatGradientCss() }} />
+      <div
+        className="h3-legend-bar"
+        style={{ background: heatGradientCss() }}
+      />
       <div className="h3-legend-ticks">
         <span>≤{formatValue(lo)}</span>
         <span>{formatValue((lo + hi) / 2)}</span>
         <span>≥{formatValue(hi)}</span>
       </div>
       <div className="h3-legend-key">
-        <span className="h3-legend-swatch" style={{ opacity: MEASURED_OPACITY }} /> measured
-        <span className="h3-legend-swatch" style={{ opacity: ESTIMATED_OPACITY, marginLeft: 10 }} /> estimated
+        <span
+          className="h3-legend-swatch"
+          style={{ opacity: MEASURED_OPACITY }}
+        />{' '}
+        measured
+        <span
+          className="h3-legend-swatch"
+          style={{ opacity: ESTIMATED_OPACITY, marginLeft: 10 }}
+        />{' '}
+        estimated
       </div>
     </div>
   )
@@ -220,12 +267,26 @@ export function H3HeatmapMap({
   height = 560,
 }: Props) {
   return (
-    <div className="leaflet-map-wrap h3-map" style={{ height, width: '100%', position: 'relative' }}>
-      <MapContainer center={center} zoom={12} style={{ height: '100%', width: '100%' }} scrollWheelZoom>
+    <div
+      className="leaflet-map-wrap h3-map"
+      style={{ height, width: '100%', position: 'relative' }}
+    >
+      <MapContainer
+        center={center}
+        zoom={12}
+        style={{ height: '100%', width: '100%' }}
+        scrollWheelZoom
+      >
         <TileLayer attribution={ATTRIBUTION} url={TILES} />
         <ZoomReporter onZoom={onZoom} />
         <BackgroundClick onClick={() => onSelect(null)} />
-        <HexLayer cells={cells} domain={domain} formatValue={formatValue} describeCell={describeCell} onSelect={onSelect} />
+        <HexLayer
+          cells={cells}
+          domain={domain}
+          formatValue={formatValue}
+          describeCell={describeCell}
+          onSelect={onSelect}
+        />
         <TrackLayer tracks={tracks} />
         {sources && <SourceLayer sources={sources} />}
         <SelectionLayer id={selectedId} />

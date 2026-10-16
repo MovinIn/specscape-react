@@ -18,12 +18,7 @@ type FormState = {
   frontend: string
 }
 
-const HARDWARE_TYPES = [
-  'esraspi2psdr',
-  'esraspi3psdr',
-  'esraspi4psdr',
-  'other',
-]
+const HARDWARE_TYPES = ['esraspi2psdr', 'esraspi3psdr', 'esraspi4psdr', 'other']
 
 const empty: FormState = {
   name: '',
@@ -91,7 +86,15 @@ export default function SensorFormPage() {
   const mapMarkers = useMemo(() => {
     const lat = Number(form.latitude)
     const lon = Number(form.longitude)
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return []
+    if (
+      !form.latitude.trim() ||
+      !form.longitude.trim() ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lon) > 180
+    )
+      return []
     return [
       {
         id: sensorId ?? 'new',
@@ -107,8 +110,17 @@ export default function SensorFormPage() {
     setError(null)
     const lat = Number(form.latitude)
     const lon = Number(form.longitude)
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      setError('Latitude and longitude must be numbers.')
+    if (
+      !form.latitude.trim() ||
+      !form.longitude.trim() ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lon) > 180
+    ) {
+      setError(
+        'Enter a latitude from -90 to 90 and longitude from -180 to 180.',
+      )
       return
     }
     if (!/^[A-Za-z0-9_.-]+$/.test(form.name)) {
@@ -127,9 +139,7 @@ export default function SensorFormPage() {
       return
     }
 
-    const altitude = form.altitude.trim()
-      ? Number(form.altitude)
-      : undefined
+    const altitude = form.altitude.trim() ? Number(form.altitude) : undefined
 
     const payload: Sensor = {
       ...(loaded ?? {}),
@@ -163,7 +173,9 @@ export default function SensorFormPage() {
         navigate(`/sensors/${sensorId}`, { replace: true })
       }
     } catch {
-      const msg = isAdd ? 'Could not create sensor.' : 'Could not update sensor.'
+      const msg = isAdd
+        ? 'Could not create sensor.'
+        : 'Could not update sensor.'
       setError(msg)
       show(msg, 'error')
     } finally {
@@ -286,7 +298,10 @@ export default function SensorFormPage() {
               onChange={(e) => update('altitude', e.target.value)}
             />
           </div>
-          <label className="field" style={{ flexDirection: 'row', gap: '0.6rem' }}>
+          <label
+            className="field"
+            style={{ flexDirection: 'row', gap: '0.6rem' }}
+          >
             <input
               type="checkbox"
               checked={form.indoor}
@@ -294,13 +309,20 @@ export default function SensorFormPage() {
             />
             <span className="label">Indoor antenna</span>
           </label>
-          <div className="stack" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          <div
+            className="stack"
+            style={{ flexDirection: 'row', flexWrap: 'wrap' }}
+          >
             <button
               className="btn btn-primary"
               type="submit"
               disabled={submitting}
             >
-              {submitting ? 'Saving…' : isAdd ? 'Create sensor' : 'Save changes'}
+              {submitting
+                ? 'Saving…'
+                : isAdd
+                  ? 'Create sensor'
+                  : 'Save changes'}
             </button>
             <Link className="btn btn-ghost" to="/sensors">
               Cancel
@@ -314,9 +336,7 @@ export default function SensorFormPage() {
             markers={mapMarkers}
             height={360}
             center={
-              mapMarkers[0]
-                ? [mapMarkers[0].lat, mapMarkers[0].lon]
-                : undefined
+              mapMarkers[0] ? [mapMarkers[0].lat, mapMarkers[0].lon] : undefined
             }
             zoom={mapMarkers[0] ? 10 : 4}
             onMapClick={(lat, lon) => {

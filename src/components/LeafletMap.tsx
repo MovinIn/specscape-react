@@ -1,14 +1,22 @@
 import { useEffect, useRef } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  useMap,
+  useMapEvents,
+} from 'react-leaflet'
 import L from 'leaflet'
+import { Link } from 'react-router-dom'
 
-delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-})
+const markerIcon = (online?: boolean) =>
+  L.divIcon({
+    className: 'lx-map-marker-wrap',
+    html: `<span class="lx-map-marker${online ? ' is-sensing' : ''}"></span>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  })
 
 export type MapMarker = {
   id: string | number
@@ -59,7 +67,8 @@ function SelectionFocus({
   useEffect(() => {
     if (!selectedId) return
     const target = markers.find((m) => String(m.id) === selectedId)
-    if (target) map.setView([target.lat, target.lon], Math.max(map.getZoom(), 9))
+    if (target)
+      map.setView([target.lat, target.lon], Math.max(map.getZoom(), 9))
   }, [map, markers, selectedId])
   return null
 }
@@ -102,7 +111,10 @@ export default function LeafletMap({
   const styleHeight = typeof height === 'number' ? `${height}px` : height
 
   return (
-    <div className="leaflet-map leaflet-map-wrap" style={{ height: styleHeight, width: '100%' }}>
+    <div
+      className="leaflet-map leaflet-map-wrap"
+      style={{ height: styleHeight, width: '100%' }}
+    >
       <MapContainer
         center={center}
         zoom={zoom}
@@ -120,12 +132,26 @@ export default function LeafletMap({
           <Marker
             key={String(m.id)}
             position={[m.lat, m.lon]}
+            icon={markerIcon(m.online)}
+            alt={m.label ?? `Sensor ${m.id}`}
+            title={m.label ?? `Sensor ${m.id}`}
             eventHandlers={{
+              add: (event) =>
+                event.target
+                  .getElement()
+                  ?.setAttribute('aria-label', m.label ?? `Sensor ${m.id}`),
               click: () => onMarkerClick?.(m),
             }}
           >
             <Popup>
               <strong>{m.label ?? `Sensor ${m.id}`}</strong>
+              <div>
+                <Link
+                  to={`/specmon?sensor=${encodeURIComponent(String(m.id))}`}
+                >
+                  Explore spectrum ↗
+                </Link>
+              </div>
               {m.online !== undefined ? (
                 <div>
                   <span

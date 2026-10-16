@@ -26,6 +26,7 @@ const ActivatePage = lazy(() => import('./pages/ActivatePage'))
 const ReactivatePage = lazy(() => import('./pages/ReactivatePage'))
 const RecoverPage = lazy(() => import('./pages/RecoverPage'))
 const SensorsPage = lazy(() => import('./pages/SensorsPage'))
+const SensorManagementPage = lazy(() => import('./pages/SensorManagementPage'))
 const SensorFormPage = lazy(() => import('./pages/SensorFormPage'))
 const SensorTokenPage = lazy(() => import('./pages/SensorTokenPage'))
 const SpecMonPage = lazy(() => import('./pages/SpecMonPage'))
@@ -70,7 +71,10 @@ function AppRoutes() {
 
           <Route path="login" element={<AuthPage />} />
           <Route path="logout" element={<AuthPage />} />
-          <Route path="account/register" element={<RegisterPage key="register" />} />
+          <Route
+            path="account/register"
+            element={<RegisterPage key="register" />}
+          />
           <Route
             path="account/edit"
             element={
@@ -79,7 +83,10 @@ function AppRoutes() {
               </RequireAuth>
             }
           />
-          <Route path="account/activate/:uid/:token" element={<ActivatePage />} />
+          <Route
+            path="account/activate/:uid/:token"
+            element={<ActivatePage />}
+          />
           <Route
             path="account/reactivate/:uid/:token"
             element={<ReactivatePage />}
@@ -92,6 +99,14 @@ function AppRoutes() {
             element={
               <RequireAuth>
                 <SensorsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="sensors/manage"
+            element={
+              <RequireAuth>
+                <SensorManagementPage />
               </RequireAuth>
             }
           />

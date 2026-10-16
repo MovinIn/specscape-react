@@ -1,4 +1,9 @@
-import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 
 type Props = {
   value: number
@@ -16,6 +21,7 @@ type Props = {
   /** Text for the value bubbles (rzslider's `translate`); the raw number when omitted. */
   format?: (value: number) => string
   style?: CSSProperties
+  ariaLabel?: string
 }
 
 const HANDLE = 32
@@ -38,6 +44,7 @@ export function RzSlider({
   onEnd,
   format,
   style,
+  ariaLabel = 'Range',
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const dragging = useRef<'low' | 'high' | null>(null)
@@ -46,7 +53,8 @@ export function RzSlider({
   const span = ceil - floor || 1
   const frac = (v: number) => Math.min(1, Math.max(0, (v - floor) / span))
   const pos = (t: number) => `calc((100% - ${HANDLE}px) * ${t})`
-  const center = (t: number) => `calc((100% - ${HANDLE}px) * ${t} + ${HANDLE / 2}px)`
+  const center = (t: number) =>
+    `calc((100% - ${HANDLE}px) * ${t} + ${HANDLE / 2}px)`
 
   function valueAt(clientX: number, clientY: number) {
     const rect = rootRef.current!.getBoundingClientRect()
@@ -58,16 +66,26 @@ export function RzSlider({
     return Math.min(ceil, Math.max(floor, Number(snapped.toFixed(10))))
   }
 
-  function apply(which: 'low' | 'high', v: number) {
-    if (high === undefined) onChange(v)
-    else if (which === 'low') onChange(Math.min(v, high), high)
-    else onChange(value, Math.max(v, value))
+  function apply(which: 'low' | 'high', v: number, finish = false) {
+    const low =
+      high === undefined ? v : which === 'low' ? Math.min(v, high) : value
+    const upper =
+      high === undefined
+        ? undefined
+        : which === 'high'
+          ? Math.max(v, value)
+          : high
+    onChange(low, upper)
+    if (finish) onEnd?.(low, upper)
   }
 
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
     if (disabled) return
     const v = valueAt(e.clientX, e.clientY)
-    const which = high !== undefined && Math.abs(v - high) < Math.abs(v - value) ? 'high' : 'low'
+    const which =
+      high !== undefined && Math.abs(v - high) < Math.abs(v - value)
+        ? 'high'
+        : 'low'
     dragging.current = which
     setActive(which)
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -99,6 +117,44 @@ export function RzSlider({
   const pointer = (t: number, key: string) => (
     <span
       key={key}
+      role="slider"
+      tabIndex={disabled ? -1 : 0}
+      aria-label={`${ariaLabel}${high === undefined ? '' : key === 'low' ? ' start' : ' end'}`}
+      aria-orientation={vertical ? 'vertical' : 'horizontal'}
+      aria-valuemin={key === 'high' ? value : floor}
+      aria-valuemax={key === 'low' && high !== undefined ? high : ceil}
+      aria-valuenow={key === 'low' ? value : high}
+      aria-valuetext={
+        format ? format(key === 'low' ? value : (high ?? value)) : undefined
+      }
+      aria-disabled={disabled}
+      onKeyDown={(e) => {
+        if (disabled) return
+        const current = key === 'low' ? value : (high ?? value)
+        const changes: Record<string, number> = {
+          ArrowRight: step,
+          ArrowUp: step,
+          ArrowLeft: -step,
+          ArrowDown: -step,
+          PageUp: step * 10,
+          PageDown: -step * 10,
+        }
+        const next =
+          e.key === 'Home'
+            ? floor
+            : e.key === 'End'
+              ? ceil
+              : changes[e.key] !== undefined
+                ? current + changes[e.key]
+                : null
+        if (next == null) return
+        e.preventDefault()
+        apply(
+          key === 'low' ? 'low' : 'high',
+          Math.min(ceil, Math.max(floor, next)),
+          true,
+        )
+      }}
       className={`rz-pointer${active === key ? ' rz-active' : ''}`}
       style={{ [along]: pos(t) }}
     />
@@ -107,7 +163,11 @@ export function RzSlider({
     <span
       key={`${key}-b`}
       className="rz-bubble"
-      style={vertical ? { bottom: pos(t) } : { left: center(t), transform: 'translateX(-50%)' }}
+      style={
+        vertical
+          ? { bottom: pos(t) }
+          : { left: center(t), transform: 'translateX(-50%)' }
+      }
     >
       {format ? format(v) : v}
     </span>
@@ -130,7 +190,13 @@ export function RzSlider({
       <span className="rz-bar-wrapper">
         <span className="rz-bar" />
       </span>
-      <span className="rz-bar-wrapper" style={{ [along]: center(selStart), [extent]: `calc((100% - ${HANDLE}px) * ${selEnd - selStart})` }}>
+      <span
+        className="rz-bar-wrapper"
+        style={{
+          [along]: center(selStart),
+          [extent]: `calc((100% - ${HANDLE}px) * ${selEnd - selStart})`,
+        }}
+      >
         <span className="rz-bar rz-selection" />
       </span>
       {pointer(lowT, 'low')}
@@ -140,7 +206,8 @@ export function RzSlider({
       {showTicks ? (
         <ul className="rz-ticks">
           {ticks.map((v) => {
-            const selected = high !== undefined ? v >= value && v <= high : v <= value
+            const selected =
+              high !== undefined ? v >= value && v <= high : v <= value
             return (
               <li
                 key={v}

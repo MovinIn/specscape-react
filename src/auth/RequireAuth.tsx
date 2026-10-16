@@ -41,7 +41,13 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   }
 
   if (!authenticated) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: location.pathname + location.search }}
+      />
+    )
   }
 
   return children
@@ -56,7 +62,13 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
   }
 
   if (!authenticated) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: location.pathname + location.search }}
+      />
+    )
   }
 
   if (!isAdmin) {

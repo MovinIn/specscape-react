@@ -1,3 +1,4 @@
+import { isPreview } from '../config/navigation'
 import { useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api/client'
@@ -45,7 +46,12 @@ export default function RecoverPage() {
     try {
       await api.requestPassword(mailInput, captcha)
       notifier.reset()
-      notifier.show('An e-mail with further instructions has been sent.', 'info')
+      notifier.show(
+        isPreview
+          ? 'Recovery request saved in the local preview.'
+          : 'An e-mail with further instructions has been sent.',
+        'info',
+      )
       reloadCaptcha()
     } catch (err) {
       notifier.reset()
@@ -66,7 +72,12 @@ export default function RecoverPage() {
     try {
       await api.requestUsername(mailInput, captcha)
       notifier.reset()
-      notifier.show('You will receive the username in an e-mail.', 'info')
+      notifier.show(
+        isPreview
+          ? 'Username request saved in the local preview.'
+          : 'You will receive the username in an e-mail.',
+        'info',
+      )
       reloadCaptcha()
     } catch (err) {
       notifier.reset()
@@ -87,7 +98,12 @@ export default function RecoverPage() {
     try {
       await api.resendActivation(mailInput, captcha)
       notifier.reset()
-      notifier.show('Activation mail sent.', 'info')
+      notifier.show(
+        isPreview
+          ? 'Activation request saved in the local preview.'
+          : 'Activation mail sent.',
+        'info',
+      )
       reloadCaptcha()
     } catch (err) {
       notifier.reset()
@@ -126,13 +142,17 @@ export default function RecoverPage() {
             <h2>Account Recovery</h2>
           </div>
 
-          {loading ? <div className="text-center">Processing request...</div> : null}
+          {loading ? (
+            <div className="text-center">Processing request...</div>
+          ) : null}
 
           {noinput && !loading ? (
             <form className="form-horizontal" onSubmit={submit}>
               <div className="form-group">
                 <fieldset style={{ marginTop: '1em' }}>
-                  <label className="col-md-4 control-label">What&apos;s wrong?</label>
+                  <label className="col-md-4 control-label">
+                    What&apos;s wrong?
+                  </label>
                   <div className="col-md-4">
                     <div>
                       <input
@@ -170,8 +190,8 @@ export default function RecoverPage() {
                   <div className="col-sm-offset-4 col-sm-8">
                     {mode === 'forgot_username' ? (
                       <div>
-                        Don&apos;t know your username anymore? No worries, enter your
-                        e-mail address and we send it to you.
+                        Don&apos;t know your username anymore? No worries, enter
+                        your e-mail address and we send it to you.
                       </div>
                     ) : null}
                     {mode === 'forgot_pass' ? (
@@ -182,8 +202,9 @@ export default function RecoverPage() {
                     ) : null}
                     {mode === 'lost_activation' ? (
                       <div>
-                        Please check your spam folder. If it is not there, we will
-                        send it again if you enter your e-mail address below.
+                        Please check your spam folder. If it is not there, we
+                        will send it again if you enter your e-mail address
+                        below.
                       </div>
                     ) : null}
                   </div>
@@ -209,13 +230,24 @@ export default function RecoverPage() {
                   <div className="form-group">
                     <label className="col-md-4 control-label">Captcha</label>
                     <div className="col-md-4">
-                      <Recaptcha key={widgetKey} onChange={setCaptcha} hideLabel />
+                      <Recaptcha
+                        key={widgetKey}
+                        onChange={setCaptcha}
+                        hideLabel
+                      />
                     </div>
                   </div>
                 </fieldset>
-                <div className="form-group form-actions" style={{ marginTop: '1em' }}>
+                <div
+                  className="form-group form-actions"
+                  style={{ marginTop: '1em' }}
+                >
                   <div className="col-sm-offset-4 col-sm-8">
-                    <input type="submit" className="btn btn-primary" value="Submit" />
+                    <input
+                      type="submit"
+                      className="btn btn-primary"
+                      value="Submit"
+                    />
                   </div>
                 </div>
               </div>

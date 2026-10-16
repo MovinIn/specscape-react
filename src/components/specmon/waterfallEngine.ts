@@ -1,3 +1,4 @@
+import { CHART_BACKGROUND, CHART_TEXT } from './chartTheme'
 import { printDate, printHzUnit } from '../../lib/spectrum'
 
 /** Port of the es-waterfall component's drawing and mouse logic (es-waterfall.js). */
@@ -21,10 +22,22 @@ export type RowData = {
 }
 
 export type WaterfallCallbacks = {
-  onSelect: (sel: { freq: number; time: Date; snr: number | null } | null) => void
+  onSelect: (
+    sel: { freq: number; time: Date; snr: number | null } | null,
+  ) => void
   onRowData: (row: RowData) => void
-  onZoom: (startFreq: number, maxFreq: number, startTime: number, maxTime: number) => void
-  onBboxChange: (startFreq: number, maxFreq: number, startTime: number, maxTime: number) => void
+  onZoom: (
+    startFreq: number,
+    maxFreq: number,
+    startTime: number,
+    maxTime: number,
+  ) => void
+  onBboxChange: (
+    startFreq: number,
+    maxFreq: number,
+    startTime: number,
+    maxTime: number,
+  ) => void
   onHint: (message: string) => void
   onMaxNumVals: (vals: [number, number]) => void
 }
@@ -39,7 +52,10 @@ const STOPS: [number, number, number][] = [
 ]
 
 /** chroma.scale(black, blue, green, red).domain([q1, q2, q3, max]) with the legacy quartiles. */
-export function makeColorScale(low: number, high: number): (v: number) => string {
+export function makeColorScale(
+  low: number,
+  high: number,
+): (v: number) => string {
   const range = high - low
   const domain = [low, high - (2 * range) / 3, high - range / 3, high]
   return (v: number) => {
@@ -52,7 +68,11 @@ export function makeColorScale(low: number, high: number): (v: number) => string
       const t = (v - domain[i]) / (domain[i + 1] - domain[i])
       const a = STOPS[i]
       const b = STOPS[i + 1]
-      c = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
+      c = [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+      ]
     }
     return `rgb(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])})`
   }
@@ -101,7 +121,11 @@ export class WaterfallEngine {
   private dataCanvas: HTMLCanvasElement
   private cb: WaterfallCallbacks
 
-  constructor(canvas: HTMLCanvasElement, dataCanvas: HTMLCanvasElement, cb: WaterfallCallbacks) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    dataCanvas: HTMLCanvasElement,
+    cb: WaterfallCallbacks,
+  ) {
     this.canvas = canvas
     this.dataCanvas = dataCanvas
     this.cb = cb
@@ -159,7 +183,7 @@ export class WaterfallEngine {
   }
 
   private restoreBackground() {
-    this.ctx.fillStyle = '#ffffff'
+    this.ctx.fillStyle = CHART_BACKGROUND
     this.ctx.fillRect(0, 0, this.width, this.height)
     this.ctx.drawImage(this.backgroundCanvas, 0, 0)
   }
@@ -217,7 +241,10 @@ export class WaterfallEngine {
       this.dragData = newVals
 
       this.drawAxes(newVals)
-      this.drawDataImage([this.plotX0 - res[0] * deltaF, this.plotY0 - res[1] * deltaT])
+      this.drawDataImage([
+        this.plotX0 - res[0] * deltaF,
+        this.plotY0 - res[1] * deltaT,
+      ])
     } else if (this.mouseDragging && this.mouseZooming) {
       if (this.selectedX.length < 2) {
         this.selectedX.push(x)
@@ -236,7 +263,12 @@ export class WaterfallEngine {
         this.plotHeight,
       )
       this.ctx.restore()
-    } else if (x >= 0 && y >= 0 && d.values.length > y && d.values[y].length > x) {
+    } else if (
+      x >= 0 &&
+      y >= 0 &&
+      d.values.length > y &&
+      d.values[y].length > x
+    ) {
       const v = d.values[y][x]
       this.cb.onSelect({
         freq: d.startFreq + x * d.freqRes,
@@ -253,7 +285,12 @@ export class WaterfallEngine {
       this.restoreBackground()
       this.ctx.save()
       this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'
-      this.ctx.fillRect(this.plotX0, this.plotY0 + y * res[1], this.plotWidth, res[1])
+      this.ctx.fillRect(
+        this.plotX0,
+        this.plotY0 + y * res[1],
+        this.plotWidth,
+        res[1],
+      )
       this.ctx.restore()
     }
   }
@@ -265,9 +302,11 @@ export class WaterfallEngine {
       this.clearPlot()
       return
     }
-    let x0 = this.plotX0 + ((minFreq - d.startFreq) / d.freqRes) * this.resolution[0]
+    let x0 =
+      this.plotX0 + ((minFreq - d.startFreq) / d.freqRes) * this.resolution[0]
     if (x0 < this.plotX0) x0 = this.plotX0
-    const x1 = this.plotX0 + ((maxFreq - d.startFreq) / d.freqRes) * this.resolution[0]
+    const x1 =
+      this.plotX0 + ((maxFreq - d.startFreq) / d.freqRes) * this.resolution[0]
 
     const ctx = this.ctx
     ctx.save()
@@ -305,7 +344,12 @@ export class WaterfallEngine {
     if (this.mouseDragging && !this.mouseZooming && this.dragData) {
       const dd = this.dragData
       this.currentData = dd
-      this.cb.onBboxChange(dd.startFreq, dd.maxFreq ?? 0, dd.startTime, dd.maxTime ?? 0)
+      this.cb.onBboxChange(
+        dd.startFreq,
+        dd.maxFreq ?? 0,
+        dd.startTime,
+        dd.maxTime ?? 0,
+      )
     } else if (this.mouseDragging && this.mouseZooming && hasValues(d)) {
       if (this.noZoomEvent) return
       const startFreq = d.startFreq + this.selectedX[0] * d.freqRes
@@ -401,7 +445,11 @@ export class WaterfallEngine {
   }
 
   /** The legacy "poor-man's" zoom animation. */
-  private animate(steps: number, speed: number, frame: (cnt: number, steps: number) => void) {
+  private animate(
+    steps: number,
+    speed: number,
+    frame: (cnt: number, steps: number) => void,
+  ) {
     this.enableInteraction(false)
     this.ctx.globalAlpha = 0.5
     let cnt = 1
@@ -442,12 +490,16 @@ export class WaterfallEngine {
     const spacerBottom = 70
     const fontSize = 11
     ctx.font = `${fontSize}px Verdana`
-    ctx.strokeStyle = 'rgba(0, 0, 0)'
+    ctx.strokeStyle = CHART_TEXT
     ctx.lineWidth = 1
 
-    let maxTickSize = ctx.measureText(printDate(new Date(data.startTime * 1000)))
+    let maxTickSize = ctx.measureText(
+      printDate(new Date(data.startTime * 1000)),
+    )
     for (let i = 0; i < data.values.length; i++) {
-      const ts = ctx.measureText(printDate(new Date((data.startTime + data.timeRes * i) * 1000)))
+      const ts = ctx.measureText(
+        printDate(new Date((data.startTime + data.timeRes * i) * 1000)),
+      )
       if (ts.width > maxTickSize.width) maxTickSize = ts
     }
 
@@ -462,11 +514,14 @@ export class WaterfallEngine {
 
     // y axis is time, x axis is frequency
     this.resolution[1] = plotHeight / data.values.length
-    const maxLineLength = data.values.reduce((max, v) => (v.length > max ? v.length : max), 0)
+    const maxLineLength = data.values.reduce(
+      (max, v) => (v.length > max ? v.length : max),
+      0,
+    )
     this.resolution[0] = Math.max(plotWidth / maxLineLength, 1)
     const res = this.resolution
 
-    ctx.fillStyle = '#000000'
+    ctx.fillStyle = CHART_TEXT
 
     ctx.save()
     ctx.translate(spacer, height / 2)
@@ -488,7 +543,7 @@ export class WaterfallEngine {
       ctx.stroke()
     }
 
-    ctx.fillStyle = '#ffffff'
+    ctx.fillStyle = CHART_BACKGROUND
     ctx.fillRect(plotX0, plotY0, plotWidth, plotHeight)
 
     ctx.beginPath()
@@ -502,16 +557,20 @@ export class WaterfallEngine {
     ctx.stroke()
 
     // frequency ticks, skipped where they would collide
-    ctx.fillStyle = '#000000'
+    ctx.fillStyle = CHART_TEXT
     let lastX: number | null = null
     for (let i = 0; i < data.values[0].length; i++) {
       const cFreq = printHzUnit(data.startFreq + i * data.freqRes, 6)
       const ts = ctx.measureText(cFreq)
       const xPos = plotX0 + i * res[0] + res[0] / 2 - ts.width / 2
-      if ((lastX != null && lastX + 3 > xPos) || xPos + ts.width > width) continue
+      if ((lastX != null && lastX + 3 > xPos) || xPos + ts.width > width)
+        continue
       ctx.beginPath()
       ctx.moveTo(plotX0 + i * res[0] + res[0] / 2, plotY0 + plotHeight + 1)
-      ctx.lineTo(plotX0 + i * res[0] + res[0] / 2, plotY0 + plotHeight + 2 + spacer)
+      ctx.lineTo(
+        plotX0 + i * res[0] + res[0] / 2,
+        plotY0 + plotHeight + 2 + spacer,
+      )
       ctx.stroke()
       ctx.fillText(cFreq, xPos, plotY0 + plotHeight + spacer + fontSize + 2)
       lastX = xPos + ts.width
@@ -549,7 +608,17 @@ export class WaterfallEngine {
       const sWidth = this.plotWidth
       const sHeight = this.plotHeight - imgCoords[1]
       if (sWidth > 0 && sHeight > 0) {
-        ctx.drawImage(this.dataCanvas, sx, sy, sWidth, sHeight, dx, dy, sWidth, sHeight)
+        ctx.drawImage(
+          this.dataCanvas,
+          sx,
+          sy,
+          sWidth,
+          sHeight,
+          dx,
+          dy,
+          sWidth,
+          sHeight,
+        )
       }
     } else {
       ctx.globalAlpha = 1.0
@@ -606,7 +675,10 @@ export class WaterfallEngine {
     this.drawAxes(data)
     this.updateSpectrumData(data)
     this.redraw()
-    this.cb.onMaxNumVals([Math.floor(this.plotWidth), Math.floor(this.plotHeight)])
+    this.cb.onMaxNumVals([
+      Math.floor(this.plotWidth),
+      Math.floor(this.plotHeight),
+    ])
   }
 
   private clearPlot() {
@@ -633,7 +705,7 @@ export function drawColorLegend(
 
   const legendHeight = canvas.height
   const legendWidth = canvas.width
-  ctx.fillStyle = '#ffffff'
+  ctx.fillStyle = CHART_BACKGROUND
   ctx.fillRect(0, 0, legendWidth, legendHeight)
 
   const textX = 35
@@ -650,14 +722,18 @@ export function drawColorLegend(
   for (let i = 0; i < legendHeight; i++) {
     const v = scaleMax - (range / legendHeight) * i
     if (v < valMax && !upperLabelDrawn && valMax < scaleMax) {
-      ctx.fillStyle = '#000000'
+      ctx.fillStyle = CHART_TEXT
       ctx.fillText(`${valMax} dB`, textX, Math.max(ascent * 2, i + ascent / 2))
       upperLabelDrawn = true
     } else if (v < valQ1 && !lowerLabelDrawn) {
-      ctx.fillStyle = '#000000'
-      ctx.fillText(`${valQ1} dB`, textX, Math.min(legendHeight - ascent, i + ascent / 2))
+      ctx.fillStyle = CHART_TEXT
+      ctx.fillText(
+        `${valQ1} dB`,
+        textX,
+        Math.min(legendHeight - ascent, i + ascent / 2),
+      )
       lowerLabelDrawn = true
-      ctx.fillStyle = '#ffffff'
+      ctx.fillStyle = CHART_BACKGROUND
     } else {
       ctx.fillStyle = colors(v)
     }

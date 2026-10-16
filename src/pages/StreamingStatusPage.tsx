@@ -130,11 +130,12 @@ export default function StreamingStatusPage() {
             xAxis: {
               title: { text: 'Hour of Day (UTC)' },
               // legacy: [...Array(23).keys()], i.e. 0..22
-              categories: [...Array(23).keys()],
+              categories: [...Array(24).keys()],
             },
             yAxis: { title: { text: 'Started Sessions [%]' } },
             tooltip: {
-              headerFormat: '<span style="font-size: 10px">{point.key}:</span> ',
+              headerFormat:
+                '<span style="font-size: 10px">{point.key}:</span> ',
               pointFormat: '{point.y}%',
               valueDecimals: 0,
             },
@@ -142,7 +143,10 @@ export default function StreamingStatusPage() {
               {
                 type: 'column',
                 showInLegend: false,
-                data: usageHours.map((uh) => [uh.hour, (uh.startedSessions / totalUsage) * 100]),
+                data: usageHours.map((uh) => [
+                  uh.hour,
+                  totalUsage > 0 ? (uh.startedSessions / totalUsage) * 100 : 0,
+                ]),
               },
             ],
           },
@@ -171,7 +175,11 @@ export default function StreamingStatusPage() {
     }
   }, [])
 
-  const tabs: { heading: string; count: number | undefined; body: ReactNode }[] = [
+  const tabs: {
+    heading: string
+    count: number | undefined
+    body: ReactNode
+  }[] = [
     {
       heading: 'Connected Sensors',
       count: status.connectedSensors?.length,
@@ -226,6 +234,12 @@ export default function StreamingStatusPage() {
 
   return (
     <div className="container">
+      <header className="lx-admin-heading">
+        <div>
+          <h1>Streaming operations</h1>
+          <p>Connected sensors, active sessions and network usage.</p>
+        </div>
+      </header>
       <div className="row">
         {loading ? (
           <div>
@@ -241,7 +255,10 @@ export default function StreamingStatusPage() {
               <div className="row" style={{ margin: 10 }}>
                 <ul className="nav nav-pills nav-stacked col-sm-4">
                   {tabs.map((t, i) => (
-                    <li key={t.heading} className={`uib-tab nav-item${activePill === i ? ' active' : ''}`}>
+                    <li
+                      key={t.heading}
+                      className={`uib-tab nav-item${activePill === i ? ' active' : ''}`}
+                    >
                       <a
                         href=""
                         className="nav-link"
@@ -250,14 +267,20 @@ export default function StreamingStatusPage() {
                           setActivePill(i)
                         }}
                       >
-                        {t.heading} <span className="label label-default pull-right">{t.count}</span>
+                        {t.heading}{' '}
+                        <span className="label label-default pull-right">
+                          {t.count}
+                        </span>
                       </a>
                     </li>
                   ))}
                 </ul>
                 <div className="tab-content col-sm-8">
                   {tabs.map((t, i) => (
-                    <div key={t.heading} className={`tab-pane${activePill === i ? ' active' : ''}`}>
+                    <div
+                      key={t.heading}
+                      className={`tab-pane${activePill === i ? ' active' : ''}`}
+                    >
                       {t.body}
                     </div>
                   ))}

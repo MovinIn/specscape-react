@@ -2,10 +2,15 @@
 // Only the surface this app uses is declared.
 declare module 'highcharts' {
   export interface Chart {
-    setSize(width?: number | null, height?: number | null, animation?: boolean): void
+    setSize(
+      width?: number | null,
+      height?: number | null,
+      animation?: boolean,
+    ): void
     destroy(): void
   }
   const Highcharts: {
+    merge(...sources: Record<string, unknown>[]): Record<string, unknown>
     chart(renderTo: HTMLElement, options: Record<string, unknown>): Chart
   }
   export default Highcharts

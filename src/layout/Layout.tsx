@@ -1,20 +1,44 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
+import { useEffect, useRef } from 'react'
 import { CookieBanner } from '../components/CookieBanner'
 import { DocumentTitle } from '../components/DocumentTitle'
-import { MockBanner } from '../components/MockBanner'
 import { ScrollToTop } from '../components/ScrollToTop'
 import { Footer } from './Footer'
 import { Navbar } from './Navbar'
+import { getPageInfo } from '../config/pages'
 
 export function Layout() {
+  const { pathname, search } = useLocation()
+  const info = getPageInfo(pathname)
+  const mainRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    mainRef.current?.focus({ preventScroll: true })
+  }, [pathname])
   return (
-    <div className="app-shell">
+    <div className="app-shell lx-shell">
       <ScrollToTop />
       <DocumentTitle />
-      <Navbar />
-      <MockBanner />
-      <main className="site-main" style={{ marginBottom: 70 }}>
-        <Outlet />
+      <Navbar key={`${pathname}${search}`} />
+      <main
+        ref={mainRef}
+        className="site-main lx-main"
+        id="main-content"
+        tabIndex={-1}
+      >
+        <div
+          key={pathname}
+          className={`lx-route-view${info ? ' lx-document-page' : ''}`}
+        >
+          {info && (
+            <div className="lx-page-kicker">
+              <span />
+              {info.group}
+            </div>
+          )}
+          <div className={info ? 'lx-page-content' : undefined}>
+            <Outlet />
+          </div>
+        </div>
       </main>
       <Footer />
       <CookieBanner />

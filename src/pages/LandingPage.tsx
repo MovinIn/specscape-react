@@ -1,357 +1,397 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import type { Sensor } from '../api/types'
-import LeafletMap, { type MapMarker } from '../components/LeafletMap'
+import type { NetworkStats } from '../api/types'
+import LeafletMap from '../components/LeafletMap'
+import { isPreview } from '../config/navigation'
+import { sensorMarkers } from '../lib/sensors'
 
 export default function LandingPage() {
-  // /network/stats is public and carries the full sensor list plus the user
-  // count, so it alone drives the counters and the map (matching index.js).
-  const [allSensors, setAllSensors] = useState<Sensor[]>([])
-  const [numUsers, setNumUsers] = useState<number | null>(null)
-
+  const [data, setData] = useState<NetworkStats | null>(null)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [attempt, setAttempt] = useState(0)
+  const [onlineOnly, setOnlineOnly] = useState(false)
   useEffect(() => {
     let cancelled = false
     api
       .getStats()
-      .then((data) => {
-        if (cancelled) return
-        setAllSensors(Array.isArray(data?.sensors) ? data.sensors : [])
-        setNumUsers(
-          typeof data?.num_users === 'number' ? data.num_users : null,
-        )
+      .then((stats) => {
+        if (!cancelled) {
+          setData(stats)
+          setStatus('ready')
+        }
       })
       .catch(() => {
-        if (cancelled) return
-        setAllSensors([])
-        setNumUsers(null)
+        if (!cancelled) setStatus('error')
       })
     return () => {
       cancelled = true
     }
-  }, [])
-
-  const sensingSensors = useMemo(
-    () => allSensors.filter((s) => s.sensing),
-    [allSensors],
+  }, [attempt])
+  const sensors = useMemo(() => data?.sensors ?? [], [data])
+  const online = sensors.filter((sensor) => sensor.sensing)
+  const visible = onlineOnly ? online : sensors
+  const markers = useMemo(
+    () =>
+      sensorMarkers(onlineOnly ? sensors.filter((s) => s.sensing) : sensors),
+    [sensors, onlineOnly],
   )
-
-  const registered = allSensors.length || '—'
-  const online = allSensors.length ? sensingSensors.length : '—'
-  const users = numUsers ?? '—'
-
-  const markers = useMemo(() => {
-    const out: MapMarker[] = []
-    for (const s of sensingSensors) {
-      const pos = s.position as
-        | { latitude?: number; longitude?: number }
-        | undefined
-      const lat = Number(pos?.latitude ?? s.latitude ?? s.lat)
-      const lon = Number(pos?.longitude ?? s.longitude ?? s.lon)
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue
-      out.push({
-        id: String(s.serial ?? s.id ?? `${lat},${lon}`),
-        lat,
-        lon,
-        label: s.name ?? String(s.serial ?? ''),
-        online: Boolean(s.sensing),
-      })
-    }
-    return out
-  }, [sensingSensors])
+  const count = (value: number | undefined) =>
+    status === 'ready' && value != null ? value.toLocaleString() : '—'
 
   return (
-    <>
-      <div className="jumbotron row-shadow" id="mainjumbo">
-        <div className="jumbotron-full jumbotron-bg" />
-        <div
-          className="jumbotron-full"
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+    <div className="lx-overview">
+      <section className="lx-hero" aria-labelledby="overview-heading">
+        <div className="lx-hero-copy">
+          <p className="lx-eyebrow">
+            <span className="lx-pulse-dot" /> THE OPEN SPECTRUM NETWORK
+          </p>
+          <h1 id="overview-heading">
+            A world of signals.
+            <br />
+            <span>A new perspective.</span>
+          </h1>
+          <p>
+            Explore the invisible. Turn shared spectrum measurements into your
+            next discovery.
+          </p>
+          <div className="lx-hero-actions">
+            <Link to="/specmon" className="lx-button lx-button-primary">
+              Explore the spectrum <span aria-hidden="true">↗</span>
+            </Link>
+            <Link to="/sensors" className="lx-text-link">
+              Find a sensor <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+          <span className="lx-hero-footnote">
+            OPEN DATA. COLLABORATIVE SCIENCE. REAL POSSIBILITIES.
+          </span>
+        </div>
+        <div className="lx-signal-art" aria-hidden="true">
+          <div className="lx-orbit lx-orbit-one" />
+          <div className="lx-orbit lx-orbit-two" />
+          <div className="lx-orbit lx-orbit-three" />
+          <svg viewBox="0 0 420 260">
+            <defs>
+              <linearGradient
+                id="signal-gradient"
+                gradientUnits="userSpaceOnUse"
+                x1="0"
+                y1="0"
+                x2="420"
+                y2="0"
+              >
+                <stop stopColor="#9168e2" />
+                <stop offset="1" stopColor="#57b5da" />
+              </linearGradient>
+            </defs>
+            {Array.from({ length: 51 }, (_, i) => {
+              const x = 32 + i * 7
+              const h =
+                15 +
+                Math.pow(Math.sin(i * 0.43), 6) * 105 +
+                Math.pow(Math.sin(i * 0.17), 12) * 64
+              return (
+                <path
+                  key={i}
+                  d={`M${x} ${145 - h / 2}v${h}`}
+                  stroke="url(#signal-gradient)"
+                  strokeWidth="2"
+                  opacity={0.3 + (i % 5) * 0.13}
+                />
+              )
+            })}
+            <path
+              d="M20 220h380M210 20v215"
+              stroke="#a598bf"
+              strokeOpacity=".1"
+              strokeDasharray="3 5"
+            />
+            <circle
+              cx="210"
+              cy="145"
+              r="100"
+              fill="none"
+              stroke="#9168e2"
+              strokeOpacity=".2"
+            />
+          </svg>
+          <span className="lx-art-coordinate lx-art-top">RF / EXPLORATION</span>
+          <span className="lx-art-coordinate lx-art-bottom">
+            20 MHz — 11.8 GHz <span>↗</span>
+          </span>
+        </div>
+      </section>
+
+      <section
+        className="lx-stats"
+        aria-label="Network snapshot"
+        aria-live="polite"
+      >
+        <div className="lx-stat">
           <div>
-            <h1>Collaborative Spectrum Monitoring</h1>
+            <span className="lx-stat-label">
+              <span className="lx-pulse-dot" /> Sensing now
+            </span>
+            <strong>{count(online.length)}</strong>
+          </div>
+          <span className="lx-stat-caption">
+            Sensors contributing measurements
+          </span>
+          <div className="lx-stat-meter">
+            <span
+              style={{
+                width: sensors.length
+                  ? `${(online.length / sensors.length) * 100}%`
+                  : '0%',
+              }}
+            />
           </div>
         </div>
-      </div>
-
-      <div id="frontpage">
-        <div className="container container-row-padding-top container-row-padding-bottom">
-          <div className="row">
-            <div className="col-sm-12">
-              <div className="page-header">
-                <h2>What Is SpecScape?</h2>
-              </div>
-              <div className="col-sm-7 text-justify">
-                <p>
-                  The SpecScape network is a crowd-sourcing initiative to
-                  collect and analyse spectrum data. It uses small radio
-                  sensors based on cheap commodity hardware and offers
-                  aggregated spectrum information over an open API.
-                </p>
-                <p>
-                  The initiative&apos;s goal is to sense the entire spectrum
-                  in populated regions of the world and to make the data
-                  available in real-time for different kinds of stakeholders
-                  who require a deeper knowledge of the actual spectrum
-                  usage.
-                </p>
-                <p>
-                  SpecScape is an open initiative in which everyone can
-                  contribute with spectrum measurements and access the
-                  collected data. If you want to take part of this
-                  initiative, get involved now by setting up a sensor at
-                  your place or <Link to="/contact">contact us</Link> to see
-                  how our data can help your business.
-                </p>
-              </div>
-              <div className="col-sm-5 text-center center-block">
-                <img
-                  src="/images/measure_original-300x246.jpg"
-                  alt="city scale spectrum measurements"
-                />
-              </div>
-            </div>
+        <div className="lx-stat">
+          <div>
+            <span className="lx-stat-label">Connected by curiosity</span>
+            <strong>{count(sensors.length)}</strong>
           </div>
+          <span className="lx-stat-caption">
+            Registered sensors across the network
+          </span>
+          <span className="lx-stat-index">01 / DISTRIBUTED SENSING</span>
+        </div>
+        <div className="lx-stat">
+          <div>
+            <span className="lx-stat-label">Research without borders</span>
+            <strong>{count(data?.num_users)}</strong>
+          </div>
+          <span className="lx-stat-caption">Registered community members</span>
+          <span className="lx-stat-index">02 / SHARED DISCOVERY</span>
+        </div>
+      </section>
 
-          <div className="row">
-            <div
-              className="col-sm-12 text-center"
-              style={{
-                marginTop: 30,
-                borderTop: '1px solid #e3e3e3',
-                borderBottom: '1px solid #e3e3e3',
-                padding: 19,
+      <section className="lx-network-section" aria-labelledby="network-heading">
+        <div className="lx-section-heading">
+          <div>
+            <p className="lx-eyebrow">A GLOBAL PERSPECTIVE</p>
+            <h2 id="network-heading">Every sensor opens a window.</h2>
+          </div>
+          <Link to="/sensors" className="lx-text-link">
+            Explore the network <span aria-hidden="true">↗</span>
+          </Link>
+        </div>
+        {status === 'error' && (
+          <div className="lx-notice" role="alert">
+            Network data is unavailable.{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setStatus('loading')
+                setAttempt((n) => n + 1)
               }}
             >
-              <Link className="btn btn-lg btn-default" to="/work-with-us">
-                Work with Us!
-              </Link>{' '}
-              <Link className="btn btn-lg btn-primary" to="/join?apply">
-                Apply for a Sensor!
-              </Link>
-            </div>
+              Try again
+            </button>
           </div>
-        </div>
-
-        <div className="container-fluid">
-          <div className="row row-shadow-top row-color-spectrum">
-            <div className="col-xs-12">
-              <div className="container">
-                <div className="row">
-                  <div className="col-sm-12 container-row-padding-top">
-                    <div className="row">
-                      <div className="text-justify col-sm-12">
-                        <div
-                          className="page-header"
-                          style={{ borderBottom: '1px solid #b3b3b3' }}
-                        >
-                          <h2>Live Spectrum Monitoring</h2>
-                        </div>
-                        <p>
-                          SpecScape enables you to monitor the spectrum of
-                          any sensor in the world with an interactive and
-                          live web application:
-                        </p>
-
-                        <div className="spectrum-labels">
-                          <div>
-                            <span
-                              className="label label-primary"
-                              title="Set multiple parameters such as the center frequency while getting live spectrum monitoring results!"
-                            >
-                              Interactive Spectrum Monitor
-                            </span>
-                          </div>
-                          <div>
-                            <span
-                              className="label label-primary"
-                              title="Access the historical data base and analyze data from the past!"
-                            >
-                              Historical Data
-                            </span>
-                          </div>
-                          <div>
-                            <span
-                              className="label label-primary"
-                              title="Access the historical data base and analyze data from the past!"
-                            >
-                              Spectrum Decoding
-                            </span>
-                          </div>
-                        </div>
-
-                        <div style={{ textAlign: 'center', marginTop: '1em' }}>
-                          <img src="/images/schema-network.png" alt="schema" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    className="col-sm-12 text-center"
-                    style={{
-                      marginTop: 30,
-                      borderTop: '1px solid #b3b3b3',
-                      padding: 19,
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="row row-shadow-bottom row-color-spectrum">
-            &nbsp;
-          </div>
-        </div>
-
-        <div className="container-fluid">
-          <div className="row row-shadow-top-dark row-color">
-            <div className="col-xs-12">
-              <div className="container">
-                <div className="row">
-                  <div className="col-xs-12">
-                    <div className="page-header">
-                      <h2>Our Goal: Worldwide Coverage</h2>
-                    </div>
-                    <div className="col-sm-8 text-justify">
-                      <p>
-                        SpecScape already has active sensors all over the
-                        world. You can help us to increase coverage and
-                        density for better measurements!
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="row row-background">
-            <LeafletMap markers={markers} height={420} />
-          </div>
-
-          <div className="row row-color">
-            <div className="col-xs-12">
-              <div className="container">
-                <div className="row" style={{ marginTop: 20 }}>
-                  <div className="col-sm-4 counter">
-                    <p className="counter-count">{registered}</p>
-                    <p className="counter-label">Registered Sensors</p>
-                  </div>
-                  <div className="col-sm-4 counter">
-                    <p className="counter-count">{online}</p>
-                    <p className="counter-label">Online Sensors</p>
-                  </div>
-                  <div className="col-sm-4 counter">
-                    <p className="counter-count">{users}</p>
-                    <p className="counter-label">Registered Users</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="row row-shadow-bottom-dark row-color">
-            &nbsp;
-          </div>
-        </div>
-
-        <div className="container container-row-padding-top container-row-padding-bottom">
-          <div className="row">
-            <div className="col-sm-12">
-              <div className="page-header">
-                <h2>Features</h2>
-              </div>
-            </div>
-            <div className="col-sm-6 text-justify center-block">
-              <div className="thumbnail" style={{ minHeight: 360 }}>
-                <img
-                  src="/images/specmon-thumb.png"
-                  alt="Monitor"
-                  width={300}
-                  height={219}
-                />
-                <div className="caption">
-                  <h3>Interactive Web App</h3>
-                  <p>
-                    Live and historical spectrum data is accessible through
-                    an interactive spectrum monitoring web application.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="col-sm-6 text-justify center-block">
-              <div className="thumbnail" style={{ minHeight: 360 }}>
-                <img
-                  src="/images/blue-lego-block-md.png"
-                  alt="API"
-                  width={208}
-                  height={219}
-                />
-                <div className="caption">
-                  <h3>API</h3>
-                  <p>
-                    Access real-time spectrum data measurements through an
-                    open API. See the{' '}
-                    <Link to="/api-spec">specification</Link> fore more
-                    details.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="row">
-            <div className="col-sm-6 text-justify center-block">
-              <div className="thumbnail" style={{ minHeight: 360 }}>
-                <img
-                  src="/images/github-lg.png"
-                  alt="Github"
-                  width={225}
-                  height={219}
-                />
-                <div className="caption">
-                  <h3>Open Source</h3>
-                  <p>
-                    We publish open source software and hardware. For more
-                    information on our code and hardware, see the{' '}
-                    <Link to="/open-source" target="_blank">
-                      Open Source page
-                    </Link>
-                    .
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="container-fluid row-shadow row-color-orange">
-          <div className="container container-row-padding-top container-row-padding-bottom">
-            <div className="row">
-              <div className="col-sm-12">
-                <div
-                  className="page-header"
-                  style={{ borderBottom: '1px solid #b3b3b3' }}
+        )}
+        <div className="lx-network-grid">
+          <div className="lx-map-panel">
+            <div className="lx-panel-topline">
+              <span>
+                <span className="lx-pulse-dot" />{' '}
+                {isPreview ? 'Sample network' : 'Network snapshot'}
+              </span>
+              <div
+                className="lx-segment"
+                role="group"
+                aria-label="Map sensor filter"
+              >
+                <button
+                  type="button"
+                  aria-pressed={!onlineOnly}
+                  onClick={() => setOnlineOnly(false)}
                 >
-                  <h2>Who Is Behind The Project?</h2>
-                </div>
-                <p>
-                  SpecScape is powered by Electrosense and operated by
-                  University of Wisconsin-Madison. ElectroSense is a
-                  non-profit organization based in Switzerland which aims at
-                  improving the way how the radio frequency spectrum is
-                  used.
-                </p>
+                  All sensors
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={onlineOnly}
+                  onClick={() => setOnlineOnly(true)}
+                >
+                  Sensing only
+                </button>
               </div>
             </div>
+            <LeafletMap
+              markers={markers}
+              center={[43, 5]}
+              zoom={3}
+              height={330}
+              fitToMarkers
+            />
+            <div className="lx-map-caption">
+              <span>
+                {status === 'loading'
+                  ? 'Loading network…'
+                  : `${markers.length} sensors with a reported location`}
+              </span>
+              <span>
+                <span className="lx-map-key" /> Sensing{' '}
+                <span className="lx-map-key is-idle" /> Offline
+              </span>
+            </div>
           </div>
+          <aside className="lx-start-panel">
+            <span className="lx-mini-label">YOUR NEXT EXPERIMENT</span>
+            <h3>
+              From signal
+              <br />
+              to insight.
+            </h3>
+            <p>A connected workflow for open spectrum research.</p>
+            <Link to="/sensors">
+              <span>01</span>
+              <div>
+                Choose your viewpoint<small>Browse sensors by location</small>
+              </div>
+              <span aria-hidden="true">↗</span>
+            </Link>
+            <Link to="/specmon">
+              <span>02</span>
+              <div>
+                Look a little closer<small>Inspect frequency and time</small>
+              </div>
+              <span aria-hidden="true">↗</span>
+            </Link>
+            <Link to="/specmon?view=map">
+              <span>03</span>
+              <div>
+                Connect the dots<small>Explore the spatial lab</small>
+              </div>
+              <span aria-hidden="true">↗</span>
+            </Link>
+          </aside>
         </div>
-      </div>
-    </>
+      </section>
+
+      <section
+        className="lx-research-section"
+        aria-labelledby="research-heading"
+      >
+        <div className="lx-section-heading">
+          <div>
+            <p className="lx-eyebrow">BUILT FOR THE CURIOUS</p>
+            <h2 id="research-heading">Go beyond the surface.</h2>
+          </div>
+          <span className="lx-section-meta">
+            ONE NETWORK. MANY POSSIBILITIES.
+          </span>
+        </div>
+        <div className="lx-feature-grid">
+          <Link to="/specmon" className="lx-feature">
+            <span className="lx-feature-number">01 / OBSERVE</span>
+            <i className="fa-solid fa-wave-square" aria-hidden="true" />
+            <h3>
+              The spectrum,
+              <br />
+              in full detail.
+            </h3>
+            <p>
+              Move through time. Zoom into a band. See the measurements behind
+              every signal.
+            </p>
+            <span className="lx-feature-link">
+              Open spectrum monitor <span aria-hidden="true">↗</span>
+            </span>
+          </Link>
+          <Link
+            to="/specmon?view=map"
+            className="lx-feature lx-feature-spatial"
+          >
+            <span className="lx-feature-number">
+              02 / DISCOVER <small>LAB</small>
+            </span>
+            <i className="fa-solid fa-layer-group" aria-hidden="true" />
+            <h3>
+              A different
+              <br />
+              dimension of data.
+            </h3>
+            <p>
+              Compare spectrum across H3 hexagons with tracks, band filters and
+              spatial metrics.
+            </p>
+            <span className="lx-feature-link">
+              Enter the spatial lab <span aria-hidden="true">↗</span>
+            </span>
+          </Link>
+          <Link to="/api-spec" className="lx-feature">
+            <span className="lx-feature-number">03 / BUILD</span>
+            <i className="fa-solid fa-code" aria-hidden="true" />
+            <h3>
+              Your questions.
+              <br />
+              Open possibilities.
+            </h3>
+            <p>
+              Bring spectrum data into your own experiments with the open
+              research API.
+            </p>
+            <span className="lx-feature-link">
+              Explore the API <span aria-hidden="true">↗</span>
+            </span>
+          </Link>
+        </div>
+      </section>
+      <section
+        className="lx-sensor-strip"
+        aria-labelledby="sensor-strip-heading"
+      >
+        <div className="lx-section-heading">
+          <h2 id="sensor-strip-heading">Start with a sensor.</h2>
+          <Link to="/sensors" className="lx-text-link">
+            View all <span aria-hidden="true">→</span>
+          </Link>
+        </div>
+        <div className="lx-sensor-shortlist">
+          {visible.slice(0, 3).map((s) => (
+            <Link
+              to={`/specmon?sensor=${encodeURIComponent(String(s.serial))}`}
+              key={String(s.serial)}
+            >
+              <span
+                className={`lx-sensor-dot${s.sensing ? ' is-sensing' : ''}`}
+              />
+              <div>
+                <strong>{s.name ?? s.serial}</strong>
+                <small>
+                  {s.sensing ? 'Sensing' : 'Offline'} ·{' '}
+                  {s.model ?? s.type ?? 'Spectrum sensor'}
+                </small>
+              </div>
+              <span aria-hidden="true">↗</span>
+            </Link>
+          ))}
+          {status === 'ready' && !visible.length && (
+            <p>No sensors in this selection. Try the full network.</p>
+          )}
+        </div>
+      </section>
+      <section className="lx-community">
+        <div>
+          <p className="lx-eyebrow">BETTER TOGETHER</p>
+          <h2>
+            Make the invisible
+            <br />
+            accessible to everyone.
+          </h2>
+          <p>
+            SpecScape is an open initiative to collect and understand spectrum
+            data. Every sensor adds a new perspective.
+          </p>
+        </div>
+        <Link to="/join" className="lx-button lx-button-primary">
+          Contribute to the network <span aria-hidden="true">↗</span>
+        </Link>
+      </section>
+    </div>
   )
 }

@@ -18,7 +18,13 @@ type Application = {
 
 /** GET /sensorDonation/stats/monthly/ — captured as {"monthly":{}} (2026-10-02). */
 type MonthlyStats = {
-  monthly: Record<string, Record<string, { created?: number; deleted?: number; shipped?: number } | undefined>>
+  monthly: Record<
+    string,
+    Record<
+      string,
+      { created?: number; deleted?: number; shipped?: number } | undefined
+    >
+  >
 }
 
 const KITS = [
@@ -27,27 +33,47 @@ const KITS = [
   'Extension Board only',
 ]
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ]
 const WEEKDAYS_MIN = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 const pad = (n: number, w = 2) => String(n).padStart(w, '0')
 
 const valid = (d: Date) => Number.isFinite(d.getTime())
 /** moment format 'YYYY.MM.DD' */
-const ymdDots = (d: Date) => (valid(d) ? `${pad(d.getFullYear(), 4)}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}` : 'Invalid date')
+const ymdDots = (d: Date) =>
+  valid(d)
+    ? `${pad(d.getFullYear(), 4)}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`
+    : 'Invalid date'
 /** moment format 'MMMM YYYY' */
-const monthYear = (d: Date) => (valid(d) ? `${MONTHS[d.getMonth()]} ${pad(d.getFullYear(), 4)}` : 'Invalid date')
+const monthYear = (d: Date) =>
+  valid(d)
+    ? `${MONTHS[d.getMonth()]} ${pad(d.getFullYear(), 4)}`
+    : 'Invalid date'
 /** moment(text, 'YYYY.MM.DD') */
 function parseDots(text: string | undefined): Date {
   if (text === undefined) return new Date() // moment(undefined, fmt) is "now"
   const m = /^(\d{4})\.(\d{1,2})\.(\d{1,2})$/.exec(text)
-  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(NaN)
+  return m
+    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+    : new Date(NaN)
 }
 /** moment(text): ISO dates are local time, anything else falls back to new Date(text) */
 function parseLoose(text: string): Date {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
-  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(text)
+  return m
+    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+    : new Date(text)
 }
 const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1)
 
@@ -70,12 +96,23 @@ function monthOptions(apps: Application[]) {
 }
 
 /** Charts built from /sensorDonation/list/all for one month (drawChartsFromAllSensorApplications). */
-function applicationCharts(d: Application[], selectedMonthId: string | undefined) {
+function applicationCharts(
+  d: Application[],
+  selectedMonthId: string | undefined,
+) {
   if (!d.length) return null
   const selectedMonth = parseDots(selectedMonthId)
-  const inMonth = (secs: number) => monthYear(new Date(secs * 1000)) === monthYear(selectedMonth)
-  const daysInMonth = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate()
-  const dayKey = (day: number) => ymdDots(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), day))
+  const inMonth = (secs: number) =>
+    monthYear(new Date(secs * 1000)) === monthYear(selectedMonth)
+  const daysInMonth = new Date(
+    selectedMonth.getFullYear(),
+    selectedMonth.getMonth() + 1,
+    0,
+  ).getDate()
+  const dayKey = (day: number) =>
+    ymdDots(
+      new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), day),
+    )
 
   const count = (field: 'created' | 'deleted' | 'shipped', fill: boolean) => {
     const o: Record<string, number> = {}
@@ -106,7 +143,11 @@ function applicationCharts(d: Application[], selectedMonthId: string | undefined
       categories: created.reduce<string[]>((cat, e) => {
         if (e && e[0]) {
           const date = parseDots(e[0])
-          cat.push(valid(date) ? `${WEEKDAYS_MIN[date.getDay()]}, ${ymdDots(date)}` : 'Invalid date')
+          cat.push(
+            valid(date)
+              ? `${WEEKDAYS_MIN[date.getDay()]}, ${ymdDots(date)}`
+              : 'Invalid date',
+          )
         }
         return cat
       }, []),
@@ -121,18 +162,30 @@ function applicationCharts(d: Application[], selectedMonthId: string | undefined
 
   const types = ['pending', 'deleted', 'shipped'] as const
   const matches = (t: (typeof types)[number], a: Application) =>
-    t === 'pending' ? !a.deleted && !a.shipped : t === 'deleted' ? Boolean(a.deleted) : Boolean(a.shipped)
+    t === 'pending'
+      ? !a.deleted && !a.shipped
+      : t === 'deleted'
+        ? Boolean(a.deleted)
+        : Boolean(a.shipped)
 
   const requestStatusDistribution: ChartOptions = {
     chart: { reflow: true, height: '400px', type: 'pie' },
     title: { text: 'Current request status distribution' },
-    series: [{ name: 'Requests', data: types.map((t) => [t, d.filter((a) => matches(t, a)).length]) }],
+    series: [
+      {
+        name: 'Requests',
+        data: types.map((t) => [t, d.filter((a) => matches(t, a)).length]),
+      },
+    ],
   }
 
   const statusByType = types.map((t) => ({
     type: 'column',
     name: t,
-    data: KITS.map((kit) => [kit, d.filter((a) => a.sensorType === kit && matches(t, a)).length]),
+    data: KITS.map((kit) => [
+      kit,
+      d.filter((a) => a.sensorType === kit && matches(t, a)).length,
+    ]),
   }))
   const requestStatusByTypeDistribution: ChartOptions = {
     chart: { reflow: true, height: '400px' },
@@ -146,7 +199,11 @@ function applicationCharts(d: Application[], selectedMonthId: string | undefined
   }
   console.log('seriesssss', requestStatusByTypeDistribution.series)
 
-  return { requestsLastMonth, requestStatusDistribution, requestStatusByTypeDistribution }
+  return {
+    requestsLastMonth,
+    requestStatusDistribution,
+    requestStatusByTypeDistribution,
+  }
 }
 
 /** Charts built from /sensorDonation/stats/monthly/ (drawChartsFromMonthlyStats). */
@@ -157,38 +214,56 @@ function monthlyCharts(stats: MonthlyStats) {
   const series = KITS.map((kit) => ({
     type: 'column',
     name: kit,
-    data: keys.map((key) => (monthly[key][kit] ? [key, monthly[key][kit]?.created] : null)),
+    data: keys.map((key) =>
+      monthly[key][kit] ? [key, monthly[key][kit]?.created] : null,
+    ),
   }))
   // an undefined category (month without the first kit) is kept, as in the legacy page
-  const firstOf = (e: unknown[] | null) => (e ? e[0] || e[1] || e[2] || '' : undefined)
+  const firstOf = (e: unknown[] | null) =>
+    e ? e[0] || e[1] || e[2] || '' : undefined
   const requestsEachMonthByDevice: ChartOptions = {
     chart: { reflow: true, height: '400px' },
     title: { text: 'Requests each month by hardware type' },
-    xAxis: { title: { text: 'Month' }, categories: series[0].data.map(firstOf) },
+    xAxis: {
+      title: { text: 'Month' },
+      categories: series[0].data.map(firstOf),
+    },
     yAxis: { title: { text: 'Created Applications' } },
     series,
   }
-  console.log('catssssss', (requestsEachMonthByDevice.xAxis as { categories: unknown }).categories)
 
-  const typeNames = { created: 'Created', deleted: 'Deleted', shipped: 'Shipped' } as const
-  const series2 = (Object.keys(typeNames) as (keyof typeof typeNames)[]).map((typeName) => ({
-    type: 'column',
-    name: typeNames[typeName],
-    data: keys.map((key) => [
-      key,
-      KITS.reduce((total, kit) => total + (monthly[key][kit]?.[typeName] || 0), 0),
-    ]),
-  }))
+  const typeNames = {
+    created: 'Created',
+    deleted: 'Deleted',
+    shipped: 'Shipped',
+  } as const
+  const series2 = (Object.keys(typeNames) as (keyof typeof typeNames)[]).map(
+    (typeName) => ({
+      type: 'column',
+      name: typeNames[typeName],
+      data: keys.map((key) => [
+        key,
+        KITS.reduce(
+          (total, kit) => total + (monthly[key][kit]?.[typeName] || 0),
+          0,
+        ),
+      ]),
+    }),
+  )
   const shortMonth = (text: string) => {
     const date = parseLoose(text + '-01')
-    return valid(date) ? `${MONTHS[date.getMonth()].slice(0, 3)} ${pad(date.getFullYear(), 4)}` : 'Invalid date'
+    return valid(date)
+      ? `${MONTHS[date.getMonth()].slice(0, 3)} ${pad(date.getFullYear(), 4)}`
+      : 'Invalid date'
   }
   const requestsEachMonthByType: ChartOptions = {
     chart: { reflow: true, height: '400px' },
     title: { text: 'Monthly events' },
     xAxis: {
       title: { text: 'Month' },
-      categories: series2[0].data.map((e) => (e[0] ? shortMonth(String(e[0])) : e[1] ? shortMonth(String(e[1])) : '')),
+      categories: series2[0].data.map((e) =>
+        e[0] ? shortMonth(String(e[0])) : e[1] ? shortMonth(String(e[1])) : '',
+      ),
     },
     yAxis: { title: { text: 'Created Applications' } },
     series: series2,
@@ -200,21 +275,36 @@ function monthlyCharts(stats: MonthlyStats) {
     series: [
       {
         name: 'Kits',
-        data: KITS.map((kit) => [kit, keys.reduce((total, key) => total + (monthly[key][kit]?.created || 0), 0)]),
+        data: KITS.map((kit) => [
+          kit,
+          keys.reduce(
+            (total, key) => total + (monthly[key][kit]?.created || 0),
+            0,
+          ),
+        ]),
       },
     ],
   }
 
-  return { requestsEachMonthByDevice, requestsEachMonthByType, requestHardwareTypeDistribution }
+  return {
+    requestsEachMonthByDevice,
+    requestsEachMonthByType,
+    requestHardwareTypeDistribution,
+  }
 }
 
 export default function SponsoringStatsPage() {
   const [apps, setApps] = useState<Application[]>([])
   const [dropdownMonths, setDropdownMonths] = useState<string[]>([])
   const [monthToId, setMonthToId] = useState<Record<string, string>>({})
-  const [selectedMonth, setSelectedMonth] = useState<string | undefined>(undefined)
-  const [appCharts, setAppCharts] = useState<ReturnType<typeof applicationCharts>>(null)
-  const [statCharts, setStatCharts] = useState<ReturnType<typeof monthlyCharts> | null>(null)
+  const [selectedMonth, setSelectedMonth] = useState<string | undefined>(
+    undefined,
+  )
+  const [appCharts, setAppCharts] =
+    useState<ReturnType<typeof applicationCharts>>(null)
+  const [statCharts, setStatCharts] = useState<ReturnType<
+    typeof monthlyCharts
+  > | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -261,7 +351,9 @@ export default function SponsoringStatsPage() {
           <div className="panel panel-default">
             <div className="panel-body">
               <div>
-                <HcChart options={appCharts?.requestStatusDistribution ?? null} />
+                <HcChart
+                  options={appCharts?.requestStatusDistribution ?? null}
+                />
               </div>
             </div>
           </div>
@@ -271,7 +363,9 @@ export default function SponsoringStatsPage() {
           <div className="panel panel-default">
             <div className="panel-body">
               <div>
-                <HcChart options={appCharts?.requestStatusByTypeDistribution ?? null} />
+                <HcChart
+                  options={appCharts?.requestStatusByTypeDistribution ?? null}
+                />
               </div>
             </div>
           </div>
@@ -281,8 +375,13 @@ export default function SponsoringStatsPage() {
           <div className="panel panel-default">
             <div className="panel-body" style={{ position: 'relative' }}>
               {selectedMonth ? (
-                <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 1 }}>
-                  <select value={selectedMonth} onChange={(e) => selectMonth(e.target.value)}>
+                <div
+                  style={{ position: 'absolute', top: 10, left: 10, zIndex: 1 }}
+                >
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => selectMonth(e.target.value)}
+                  >
                     {dropdownMonths.map((item) => (
                       <option key={item} value={item}>
                         {item}
@@ -302,7 +401,9 @@ export default function SponsoringStatsPage() {
           <div className="panel panel-default">
             <div className="panel-body">
               <div>
-                <HcChart options={statCharts?.requestsEachMonthByType ?? null} />
+                <HcChart
+                  options={statCharts?.requestsEachMonthByType ?? null}
+                />
               </div>
             </div>
           </div>
@@ -312,7 +413,9 @@ export default function SponsoringStatsPage() {
           <div className="panel panel-default">
             <div className="panel-body">
               <div>
-                <HcChart options={statCharts?.requestHardwareTypeDistribution ?? null} />
+                <HcChart
+                  options={statCharts?.requestHardwareTypeDistribution ?? null}
+                />
               </div>
             </div>
           </div>
@@ -322,7 +425,9 @@ export default function SponsoringStatsPage() {
           <div className="panel panel-default">
             <div className="panel-body">
               <div>
-                <HcChart options={statCharts?.requestsEachMonthByDevice ?? null} />
+                <HcChart
+                  options={statCharts?.requestsEachMonthByDevice ?? null}
+                />
               </div>
             </div>
           </div>

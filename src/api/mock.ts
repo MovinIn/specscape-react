@@ -1,4 +1,9 @@
-import type { AdminUser, NetworkStats, Sensor, SensorStatusEntry } from './types'
+import type {
+  AdminUser,
+  NetworkStats,
+  Sensor,
+  SensorStatusEntry,
+} from './types'
 
 const now = Math.floor(Date.now() / 1000)
 
@@ -7,6 +12,9 @@ export const MOCK_SENSORS: Sensor[] = [
     id: 1,
     serial: 11259375,
     name: 'demo-zurich',
+    uid: 'demo',
+    country: 'Switzerland',
+    model: 'Raspberry Pi 4 · RTL-SDR',
     sensing: true,
     latitude: 47.3769,
     longitude: 8.5417,
@@ -27,6 +35,9 @@ export const MOCK_SENSORS: Sensor[] = [
     id: 2,
     serial: 11259376,
     name: 'demo-leuven',
+    uid: 'demo',
+    country: 'Belgium',
+    model: 'Raspberry Pi 3 · RTL-SDR',
     sensing: false,
     latitude: 50.8798,
     longitude: 4.7005,
@@ -47,6 +58,9 @@ export const MOCK_SENSORS: Sensor[] = [
     id: 3,
     serial: 11259377,
     name: 'demo-madrid',
+    uid: 'partner',
+    country: 'Spain',
+    model: 'Raspberry Pi 2 · RTL-SDR',
     sensing: true,
     latitude: 40.4168,
     longitude: -3.7038,
@@ -72,19 +86,25 @@ export const MOCK_STATS: NetworkStats = {
   num_users: 42,
 }
 
-/** Simple synthetic spectrum matrix (time × freq). */
+/** Deterministic sample SNR values. These are illustrative, never live measurements. */
 export function mockSpectrumMatrix(rows = 48, cols = 128): number[][] {
-  const matrix: number[][] = []
-  for (let y = 0; y < rows; y++) {
-    const row: number[] = []
-    for (let x = 0; x < cols; x++) {
-      const band = Math.sin((x / cols) * Math.PI * 4 + y * 0.15)
-      const noise = Math.random() * 0.25
-      row.push(-90 + band * 25 + noise * 10)
-    }
-    matrix.push(row)
-  }
-  return matrix
+  return Array.from({ length: rows }, (_, y) =>
+    Array.from({ length: cols }, (_, x) => {
+      const t = x / Math.max(1, cols - 1)
+      const noise = 3 + Math.abs(Math.sin(x * 12.98 + y * 7.23)) * 4
+      const carrier =
+        27 * Math.exp(-Math.pow((t - 0.17) / 0.013, 2)) +
+        22 * Math.exp(-Math.pow((t - 0.38) / 0.024, 2)) +
+        31 * Math.exp(-Math.pow((t - 0.73) / 0.018, 2))
+      const intermittent = t > 0.46 && t < 0.57 && y % 16 < 10 ? 16 : 0
+      return +(
+        noise +
+        carrier +
+        intermittent +
+        2 * Math.sin(y / 5 + x / 12)
+      ).toFixed(2)
+    }),
+  )
 }
 
 export function mockRanking() {
@@ -100,7 +120,7 @@ export function mockRanking() {
 let mockWarned = false
 
 export function warnMockOnce() {
-  if (mockWarned || !import.meta.env.DEV) return
+  if (mockWarned || !import.meta.env?.DEV) return
   mockWarned = true
   console.warn(
     '[specscape] VITE_USE_MOCK_API is set — serving mock data instead of the real API.',
@@ -116,36 +136,80 @@ export function isHtmlPayload(text: string) {
 /** Fake /user/list entries in the exact shape of the real response. */
 export const MOCK_USERS: AdminUser[] = [
   {
-    uid: 'demo', username: 'demo', surname: 'User', fullName: 'Demo User',
-    mail: 'demo@specscape.local', organization: 'SpecScape',
-    postalAddress: null, telephoneNumber: null, postalCode: null,
-    city: 'Zurich', country: 'Switzerland',
-    enabled: true, authorities: [], admin: false,
-    accountNonExpired: true, accountNonLocked: true, credentialsNonExpired: true,
+    uid: 'demo',
+    username: 'demo',
+    surname: 'User',
+    fullName: 'Demo User',
+    mail: 'demo@specscape.local',
+    organization: 'SpecScape',
+    postalAddress: null,
+    telephoneNumber: null,
+    postalCode: null,
+    city: 'Zurich',
+    country: 'Switzerland',
+    enabled: true,
+    authorities: [],
+    admin: false,
+    accountNonExpired: true,
+    accountNonLocked: true,
+    credentialsNonExpired: true,
   },
   {
-    uid: 'alice', username: 'alice', surname: 'Example', fullName: 'Alice Example',
-    mail: 'alice@example.com', organization: 'Example University',
-    postalAddress: '1 Example Street', telephoneNumber: '000', postalCode: null,
-    city: 'Leuven', country: 'Belgium',
-    enabled: true, authorities: [], admin: false,
-    accountNonExpired: true, accountNonLocked: true, credentialsNonExpired: true,
+    uid: 'alice',
+    username: 'alice',
+    surname: 'Example',
+    fullName: 'Alice Example',
+    mail: 'alice@example.com',
+    organization: 'Example University',
+    postalAddress: '1 Example Street',
+    telephoneNumber: '000',
+    postalCode: null,
+    city: 'Leuven',
+    country: 'Belgium',
+    enabled: true,
+    authorities: [],
+    admin: false,
+    accountNonExpired: true,
+    accountNonLocked: true,
+    credentialsNonExpired: true,
   },
   {
-    uid: 'bob', username: 'bob', surname: 'Sample', fullName: 'Bob Sample',
-    mail: 'bob@example.org', organization: 'None',
-    postalAddress: null, telephoneNumber: null, postalCode: null,
-    city: null, country: null,
-    enabled: false, authorities: [], admin: false,
-    accountNonExpired: true, accountNonLocked: true, credentialsNonExpired: true,
+    uid: 'bob',
+    username: 'bob',
+    surname: 'Sample',
+    fullName: 'Bob Sample',
+    mail: 'bob@example.org',
+    organization: 'None',
+    postalAddress: null,
+    telephoneNumber: null,
+    postalCode: null,
+    city: null,
+    country: null,
+    enabled: false,
+    authorities: [],
+    admin: false,
+    accountNonExpired: true,
+    accountNonLocked: true,
+    credentialsNonExpired: true,
   },
   {
-    uid: 'carol', username: 'carol', surname: 'Test', fullName: 'Carol Test',
-    mail: 'carol@example.net', organization: 'Radio Club',
-    postalAddress: null, telephoneNumber: null, postalCode: null,
-    city: 'Madrid', country: 'Spain',
-    enabled: false, authorities: [], admin: false,
-    accountNonExpired: true, accountNonLocked: true, credentialsNonExpired: true,
+    uid: 'carol',
+    username: 'carol',
+    surname: 'Test',
+    fullName: 'Carol Test',
+    mail: 'carol@example.net',
+    organization: 'Radio Club',
+    postalAddress: null,
+    telephoneNumber: null,
+    postalCode: null,
+    city: 'Madrid',
+    country: 'Spain',
+    enabled: false,
+    authorities: [],
+    admin: false,
+    accountNonExpired: true,
+    accountNonLocked: true,
+    credentialsNonExpired: true,
   },
 ]
 
@@ -155,10 +219,12 @@ export function mockGet(path: string): unknown | undefined {
 
   if (bare === '/network/stats') return MOCK_STATS
   if (bare === '/sensor/list') return MOCK_SENSORS
-  if (bare === '/sensor/list/own') return MOCK_SENSORS.filter((s) => s.owner === 'demo')
+  if (bare === '/sensor/list/own')
+    return MOCK_SENSORS.filter((s) => s.owner === 'demo')
   if (bare === '/sensor/status/list') return MOCK_STATUS
   if (bare === '/network/ranking/years') return [2024, 2025, 2026]
-  if (bare === '/network/ranking/months') return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+  if (bare === '/network/ranking/months')
+    return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
   if (bare === '/network/ranking') return mockRanking()
   if (bare === '/iq/datasets') {
     return {
@@ -223,7 +289,10 @@ export function mockGet(path: string): unknown | undefined {
     ]
   }
   if (bare === '/signaling/time/hours') {
-    return [8, 9, 10, 14, 15, 20].map((hour, i) => ({ hour, startedSessions: i + 2 }))
+    return [8, 9, 10, 14, 15, 20].map((hour, i) => ({
+      hour,
+      startedSessions: i + 2,
+    }))
   }
   if (bare === '/sensorDonation/list' || bare === '/sensorDonation/list/all') {
     return [
@@ -267,12 +336,24 @@ export function mockGet(path: string): unknown | undefined {
     return {
       monthly: {
         '2026-08': {
-          'ElectroSense Kit (RasPi + Dongle + Board)': { created: 3, deleted: 1, shipped: 1 },
+          'ElectroSense Kit (RasPi + Dongle + Board)': {
+            created: 3,
+            deleted: 1,
+            shipped: 1,
+          },
           'Extension Board only': { created: 1, deleted: 0, shipped: 1 },
         },
         '2026-09': {
-          'ElectroSense Kit (RasPi + Dongle + Board)': { created: 2, deleted: 0, shipped: 0 },
-          'ElectroSense Kit (RasPi + Dongle)': { created: 1, deleted: 0, shipped: 0 },
+          'ElectroSense Kit (RasPi + Dongle + Board)': {
+            created: 2,
+            deleted: 0,
+            shipped: 0,
+          },
+          'ElectroSense Kit (RasPi + Dongle)': {
+            created: 1,
+            deleted: 0,
+            shipped: 0,
+          },
         },
       },
     }
@@ -282,15 +363,42 @@ export function mockGet(path: string): unknown | undefined {
   if (bare === '/user/profile') {
     return { uid: 'demo', mail: 'demo@specscape.local', fullName: 'Demo User' }
   }
-  if (bare.startsWith('/sensor/') && !bare.includes('registration') && !bare.includes('exists')) {
+  if (
+    bare.startsWith('/sensor/') &&
+    !bare.includes('registration') &&
+    !bare.includes('exists')
+  ) {
     const id = bare.replace('/sensor/', '')
     return (
-      MOCK_SENSORS.find((s) => String(s.serial) === id || String(s.id) === id) ??
-      MOCK_SENSORS[0]
+      MOCK_SENSORS.find(
+        (s) => String(s.serial) === id || String(s.id) === id,
+      ) ?? MOCK_SENSORS[0]
     )
   }
   if (bare === '/spectrum/aggregated') {
-    return { values: mockSpectrumMatrix(), mock: true, generatedAt: now }
+    const params = new URLSearchParams(path.split('?')[1])
+    const startFreq = Number(params.get('freqMin') ?? 20e6)
+    const endFreq = Number(params.get('freqMax') ?? 1700e6)
+    const requestedRes = Number(params.get('aggFreq') ?? 10e6)
+    const freqRes = Math.max(
+      requestedRes,
+      Math.ceil((endFreq - startFreq) / 1200),
+    )
+    const startTime = Number(params.get('timeBegin') ?? now - 3600)
+    const endTime = Number(params.get('timeEnd') ?? now)
+    const timeRes = Math.max(
+      Number(params.get('aggTime') ?? 60),
+      Math.ceil((endTime - startTime) / 240),
+    )
+    const cols = Math.max(2, Math.ceil((endFreq - startFreq) / freqRes))
+    const rows = Math.max(2, Math.ceil((endTime - startTime) / timeRes))
+    return {
+      values: mockSpectrumMatrix(rows, cols),
+      startFreq,
+      freqRes,
+      startTime,
+      timeRes,
+    }
   }
   if (bare === '/sensor/registration-token') {
     return {

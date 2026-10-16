@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import { getPageInfo } from '../config/pages'
 
 const TITLES: Record<string, string> = {
   '/': 'SpecScape',
@@ -36,6 +37,8 @@ const TITLES: Record<string, string> = {
 }
 
 function titleFor(pathname: string): string {
+  const info = getPageInfo(pathname)
+  if (info) return `${info.title} · SpecScape`
   if (TITLES[pathname]) return TITLES[pathname]
   if (pathname.startsWith('/sensors/')) return 'Sensor · SpecScape'
   if (pathname.startsWith('/sensor-application/')) {
@@ -47,9 +50,13 @@ function titleFor(pathname: string): string {
 
 /** Sync document.title with the current route. */
 export function DocumentTitle() {
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   useEffect(() => {
-    document.title = titleFor(pathname)
-  }, [pathname])
+    document.title =
+      pathname === '/specmon' &&
+      new URLSearchParams(search).get('view') === 'map'
+        ? 'Spatial view · SpecScape'
+        : titleFor(pathname)
+  }, [pathname, search])
   return null
 }

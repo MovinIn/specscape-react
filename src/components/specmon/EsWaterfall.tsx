@@ -1,3 +1,4 @@
+import { CHART_BACKGROUND } from './chartTheme'
 import { useEffect, useRef, useState } from 'react'
 import type { SpectrumBand } from '../../api/types'
 import { RzSlider } from '../RzSlider'
@@ -47,7 +48,17 @@ type Props = {
  * Ctrl+scroll zoom.
  */
 export function EsWaterfall(props: Props) {
-  const { data, bands, colorLow, colorHigh, loading, isError, message, noMoveEvent, selFreq } = props
+  const {
+    data,
+    bands,
+    colorLow,
+    colorHigh,
+    loading,
+    isError,
+    message,
+    noMoveEvent,
+    selFreq,
+  } = props
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dataCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -97,7 +108,8 @@ export function EsWaterfall(props: Props) {
 
   useEffect(() => {
     engineRef.current?.setColors(colorLow, colorHigh)
-    if (legendRef.current) drawColorLegend(legendRef.current, colorLow, colorHigh)
+    if (legendRef.current)
+      drawColorLegend(legendRef.current, colorLow, colorHigh)
   }, [colorLow, colorHigh])
 
   useEffect(() => {
@@ -119,9 +131,19 @@ export function EsWaterfall(props: Props) {
   const cats = bands?.categories
   const apps = bands?.applications
   let labels: SpectrumBand[] = []
-  if (bands != null && cats != null && apps != null && cats.length < 20 && apps.length >= 20) labels = cats
+  if (
+    bands != null &&
+    cats != null &&
+    apps != null &&
+    cats.length < 20 &&
+    apps.length >= 20
+  )
+    labels = cats
   if (bands != null && apps != null && apps.length < 20) labels = apps
-  if (bands == null || (apps != null && cats != null && apps.length >= 20 && cats.length >= 20)) {
+  if (
+    bands == null ||
+    (apps != null && cats != null && apps.length >= 20 && cats.length >= 20)
+  ) {
     labels = GENERIC_BANDS
   }
 
@@ -134,7 +156,10 @@ export function EsWaterfall(props: Props) {
           const max = band.freqMax ?? 0
           const active = selFreq != null && selFreq >= min && selFreq <= max
           return (
-            <span key={key} style={{ position: 'relative', display: 'inline-block' }}>
+            <span
+              key={key}
+              style={{ position: 'relative', display: 'inline-block' }}
+            >
               <span
                 className={`freq-label ${active ? 'label-success' : 'label-primary'}`}
                 onMouseOver={() => {
@@ -180,43 +205,71 @@ export function EsWaterfall(props: Props) {
         </div>
       ) : null}
 
-      <div className="row">
-        <div className="col-sm-1" id="es-waterfall-slider-container">
-          <div style={{ height: 15 }}>&nbsp;</div>
-          <div style={{ display: 'flex', flexDirection: 'row', height: WATERFALL_HEIGHT }}>
-            <RzSlider
-              vertical
-              value={colorLow}
-              high={colorHigh}
-              floor={SLIDER_FLOOR}
-              ceil={SLIDER_CEIL}
-              onChange={(lo, hi) => props.onColorChange(lo, hi ?? colorHigh)}
-              style={{ flex: '1 1 auto' }}
+      <div
+        className="lx-waterfall-scroll"
+        role="region"
+        aria-label="Spectrum waterfall plot"
+        tabIndex={0}
+      >
+        <div className="lx-waterfall-layout">
+          <div id="es-waterfall-slider-container">
+            <div style={{ height: 15 }}>&nbsp;</div>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                height: WATERFALL_HEIGHT,
+              }}
+            >
+              <RzSlider
+                ariaLabel="Waterfall colour scale"
+                format={(value) => `${(value / 100).toFixed(0)} dB`}
+                vertical
+                step={100}
+                value={colorLow}
+                high={colorHigh}
+                floor={SLIDER_FLOOR}
+                ceil={SLIDER_CEIL}
+                onChange={(lo, hi) => props.onColorChange(lo, hi ?? colorHigh)}
+                style={{ flex: '1 1 auto' }}
+              />
+              <canvas
+                ref={legendRef}
+                id="es-color-legend-container"
+                width={80}
+                height={WATERFALL_HEIGHT}
+              />
+            </div>
+          </div>
+          <div className="lx-waterfall-canvas" ref={wrapRef}>
+            <canvas
+              ref={canvasRef}
+              id="es-specmap-container-2"
+              className={moving ? 'move' : undefined}
+              width={1000}
+              height={WATERFALL_HEIGHT}
+              onMouseDown={() => setMoving(true)}
+              onMouseUp={() => setMoving(false)}
+              onMouseLeave={() => setMoving(false)}
+              style={{
+                backgroundColor: CHART_BACKGROUND,
+                textAlign: 'center',
+                marginTop: 15,
+              }}
             />
-            <canvas ref={legendRef} id="es-color-legend-container" width={80} height={WATERFALL_HEIGHT} />
+            <canvas
+              ref={dataCanvasRef}
+              id="es-specmap-container-3"
+              width={1000}
+              height={WATERFALL_HEIGHT}
+              style={{ backgroundColor: CHART_BACKGROUND, display: 'none' }}
+            />
           </div>
         </div>
-        <div className="col-sm-11" ref={wrapRef}>
-          <canvas
-            ref={canvasRef}
-            id="es-specmap-container-2"
-            className={moving ? 'move' : undefined}
-            width={1000}
-            height={WATERFALL_HEIGHT}
-            onMouseDown={() => setMoving(true)}
-            onMouseUp={() => setMoving(false)}
-            onMouseLeave={() => setMoving(false)}
-            style={{ backgroundColor: '#ffffff', textAlign: 'center', marginTop: 15 }}
-          />
-          <canvas
-            ref={dataCanvasRef}
-            id="es-specmap-container-3"
-            width={1000}
-            height={WATERFALL_HEIGHT}
-            style={{ backgroundColor: '#ffffff', display: 'none' }}
-          />
-        </div>
       </div>
+      <p className="lx-mobile-plot-hint">
+        Swipe horizontally to explore the plot. Use the controls above to zoom.
+      </p>
     </div>
   )
 }

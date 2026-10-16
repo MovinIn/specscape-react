@@ -12,7 +12,8 @@ import type {
   SignalingUsageHour,
   SignalingUserTime,
 } from './types'
-import { isHtmlPayload, mockGet } from './mock'
+import { isHtmlPayload } from './mock'
+import { previewRequest } from './previewStore'
 
 const API_ROOT = '/api'
 const useMock =
@@ -21,7 +22,9 @@ const useMock =
 
 function getCookie(name: string): string | null {
   const match = document.cookie.match(
-    new RegExp(`(?:^|; )${name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1')}=([^;]*)`),
+    new RegExp(
+      `(?:^|; )${name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1')}=([^;]*)`,
+    ),
   )
   return match ? decodeURIComponent(match[1]) : null
 }
@@ -34,10 +37,12 @@ function mergeHeaders(init?: HeadersInit): Headers {
   return headers
 }
 
-function fromMock<T>(path: string): T {
-  const data = mockGet(path)
+function fromMock<T>(path: string, init: RequestInit): T {
+  const data = previewRequest(path, init)
   if (data === undefined) {
-    const err = new Error(`Mock API miss: ${path}`) as Error & { status?: number }
+    const err = new Error(`Mock API miss: ${path}`) as Error & {
+      status?: number
+    }
     err.status = 404
     throw err
   }
@@ -46,7 +51,7 @@ function fromMock<T>(path: string): T {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (useMock) {
-    return fromMock<T>(path)
+    return fromMock<T>(path, init)
   }
 
   const headers = mergeHeaders(init.headers)
@@ -105,7 +110,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!text) return undefined as T
 
   if (isHtmlPayload(text)) {
-    const err = new Error(`API returned HTML instead of JSON: ${path}`) as Error & {
+    const err = new Error(
+      `API returned HTML instead of JSON: ${path}`,
+    ) as Error & {
       status?: number
     }
     err.status = 502
