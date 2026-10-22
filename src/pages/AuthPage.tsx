@@ -6,7 +6,7 @@ export default function AuthPage() {
   const { authenticated, login, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const from = (location.state as { from?: string } | null)?.from ?? '/'
+  const from = (location.state as { from?: string } | null)?.from ?? '/sensors'
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')

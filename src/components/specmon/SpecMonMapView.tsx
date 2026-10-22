@@ -318,6 +318,7 @@ export function SpecMonMapView({ center, occupancyThresholdDb }: Props) {
 
       <div style={{ position: 'relative' }}>
         <H3HeatmapMap
+          key={centerKey}
           cells={cells}
           domain={domain}
           legendTitle={legendTitle}

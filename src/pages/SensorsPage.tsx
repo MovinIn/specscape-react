@@ -99,7 +99,7 @@ export default function SensorsPage() {
   const { user, isAdmin } = useAuth()
   const [sensors, setSensors] = useState<Sensor[]>([])
   const [statusMap, setStatusMap] = useState<Record<string, ControllerInfo>>({})
-  const [selected, setSelected] = useState<Sensor | null>(null)
+  const [, setSelected] = useState<Sensor | null>(null)
   const [search, setSearch] = useState('')
   const [statusDialog, setStatusDialog] = useState<Sensor | null>(null)
 
@@ -168,15 +168,13 @@ export default function SensorsPage() {
     : undefined
 
   return (
-    <div className="container-fluid">
-      <div className="row">
-        <div
-          className="col-xs-4 col-md-5 sensors-map-col"
-          style={{ position: 'fixed', height: '100%' }}
-        >
+    <div className="sensors-page">
+      <div className="sensors-layout">
+        <div className="sensors-map-col">
           <EsLeafletMap
             sensors={mapSensors}
             scrolling
+            fitCluster
             height="100%"
             onSelect={(serial) => {
               const found = sensors.find((s) => String(s.serial) === serial)
@@ -185,9 +183,7 @@ export default function SensorsPage() {
           />
         </div>
 
-        <div className="col-xs-4 col-md-5" />
-
-        <div className="col-xs-8 col-md-7" style={{ zoom: 0.9 }}>
+        <div className="sensors-list-col">
           <div className="row">
             <div className="col-sm-9">
               <Link to="/sensors/add" className="btn btn-success btn-sm">

@@ -1,0 +1,118 @@
+/* Site header (top bar). Ported from specscape-andrew, scoped under .workspace-header. */
+body { padding-top: 0; }
+
+.workspace-header {
+  --ink: #243647;
+  --muted: #697a8a;
+  --blue: #2675b9;
+  --line: #dfe6ec;
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.workspace-header a { color: var(--blue); text-decoration: none; }
+.workspace-header :focus-visible { outline: 3px solid #599ed8; outline-offset: 4px; }
+
+.header-inner {
+  max-width: 1280px;
+  height: 76px;
+  margin: auto;
+  padding: 0 36px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 25px;
+  font-weight: 650;
+  letter-spacing: -1px;
+  color: var(--ink);
+}
+.workspace-header a.brand { color: var(--ink); }
+.brand:hover { text-decoration: none; }
+.brand-accent { color: var(--blue); }
+.brand-mark { display: block; width: 32px; height: 32px; flex-shrink: 0; object-fit: contain; }
+
+.header-actions { margin-left: auto; display: flex; gap: 22px; align-items: center; }
+.nav-menu { position: relative; }
+.nav-menu-toggle {
+  border: 0;
+  background: transparent;
+  padding: 10px 0;
+  color: #526373;
+  font: inherit;
+  cursor: pointer;
+}
+.nav-menu-toggle:hover { color: var(--blue); }
+.nav-menu-toggle i { font-size: 9px; margin-left: 8px; }
+.nav-menu-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 230px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px #24364718;
+}
+.workspace-header .nav-menu-panel a {
+  display: block;
+  padding: 9px 12px;
+  color: var(--ink);
+  border-radius: 5px;
+}
+.workspace-header .nav-menu-panel a:hover { background: #eef5fb; text-decoration: none; }
+
+.workspace-header .sign-in {
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--blue);
+  background: var(--blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 550;
+  transition: background .15s;
+}
+.workspace-header .sign-in:hover,
+.workspace-header .sign-in:focus { background: #1a5e96; border-color: #1a5e96; color: #fff; }
+.workspace-header .sign-in i { margin-left: 10px; font-size: 10px; }
+
+.mobile-nav-toggle { display: none; }
+.skip-link { position: absolute; left: 12px; top: -100px; padding: 10px; background: #fff; }
+.skip-link:focus { top: 10px; z-index: 10; }
+
+@media (max-width: 767px) {
+  .header-inner { height: auto; min-height: 64px; flex-wrap: wrap; padding: 14px 20px; }
+  .brand { font-size: 22px; }
+  .mobile-nav-toggle {
+    display: block;
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid var(--line);
+    padding: 7px 11px;
+    border-radius: 5px;
+  }
+  .mobile-nav-toggle ~ .header-actions { display: none; }
+  .header-actions { margin-left: auto; }
+  .mobile-nav-toggle ~ .header-actions.mobile-open {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    width: 100%;
+    margin-left: 0;
+    padding: 15px 0 0;
+  }
+  .header-actions .nav-menu-panel { right: auto; left: 0; }
+  .header-actions .sign-in { margin-left: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .workspace-header * { transition: none !important; } }

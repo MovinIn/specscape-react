@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { AggregatedSpectrum, Sensor } from '../api/types'
+import { sensorCluster } from '../lib/sensorGeo'
 import { useAuth } from '../auth/AuthContext'
 import LeafletMap, { type MapMarker } from '../components/LeafletMap'
 import { EsBarPlot } from '../components/specmon/EsBarPlot'
@@ -81,6 +82,7 @@ const SpecMonMapView = lazy(() =>
 /** Synthetic map data is centred here when the sensor has no position (demo-zurich). */
 const DEFAULT_MAP_CENTER: [number, number] = [47.3769, 8.5417]
 
+
 type SpecMonView = 'time' | 'map'
 
 export default function SpecMonPage() {
@@ -88,12 +90,29 @@ export default function SpecMonPage() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [allSensors, setAllSensors] = useState<Sensor[]>([])
+  /** Sensors used to place the spatial view; null until the catalog has loaded. */
+  const [centerSensors, setCenterSensors] = useState<Sensor[] | null>(null)
   const [sensor, setSensor] = useState<{ serial: string; name: string; uid?: string }>({
     serial: searchParams.get('sensor') ?? '',
     name: '',
   })
   const [senSelDialog, setSenSelDialog] = useState(false)
-  const [view, setView] = useState<SpecMonView>(searchParams.get('view') === 'map' ? 'map' : 'time')
+  // The URL is the source of truth for the view, so sidebar links between the
+  // time and map views (same route, different query) switch the page.
+  const view: SpecMonView = searchParams.get('view') === 'map' ? 'map' : 'time'
+  const setView = useCallback(
+    (next: SpecMonView) =>
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev)
+          if (next === 'map') params.set('view', 'map')
+          else params.delete('view')
+          return params
+        },
+        { replace: true },
+      ),
+    [setSearchParams],
+  )
 
   const [startTime, setStartTime] = useState(() => new Date(Date.now() - 3600_000))
   const [aggFun, setAggFun] = useState<'AVG' | 'MAX'>('AVG')
@@ -137,6 +156,14 @@ export default function SpecMonPage() {
         if (cancelled) return
         const sensors = Array.isArray(list) ? list : []
         setAllSensors(sensors)
+        // The public network list is the fallback when the catalog has no positions.
+        let forCenter = sensors
+        if (!sensorCluster(sensors)) {
+          const stats = await api.getStats().catch(() => null)
+          forCenter = Array.isArray(stats?.sensors) ? stats.sensors : []
+        }
+        if (cancelled) return
+        setCenterSensors(forCenter)
 
         const paramSerial = searchParams.get('sensor')
         let picked = sensors.find((s) => String(s.serial) === paramSerial)
@@ -150,6 +177,7 @@ export default function SpecMonPage() {
           })
         }
       } catch {
+        if (!cancelled) setCenterSensors([])
         setStatusMessage('Could not load sensor list')
         setIsError(true)
       }
@@ -253,16 +281,25 @@ export default function SpecMonPage() {
     drawOccupancy(occRef.current, occupancy)
   }, [occupancy, showOccupancy])
 
+  // Keep ?sensor= in step with the selection. Only touches the URL when it
+  // differs, so it can't overwrite a navigation that is already under way.
   useEffect(() => {
     setSearchParams(
-      {
-        ...(sensor.serial ? { sensor: sensor.serial } : {}),
-        ...(view === 'map' ? { view } : {}),
+      (prev) => {
+        if ((prev.get('sensor') ?? '') === (sensor.serial ?? '')) return prev
+        const params = new URLSearchParams(prev)
+        if (sensor.serial) params.set('sensor', sensor.serial)
+        else params.delete('sensor')
+        return params
       },
       { replace: true },
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sensor.serial, view])
+  }, [sensor.serial])
+
+  useEffect(() => {
+    if (view === 'map') setLiveMode(false)
+  }, [view])
 
   // Auto-load the plot once the sensor serial is first resolved (e.g. from the URL ?sensor= param).
   useEffect(() => {
@@ -376,12 +413,11 @@ export default function SpecMonPage() {
     return out
   }, [allSensors])
 
-  const mapCenter: [number, number] = useMemo(() => {
-    const s = allSensors.find((a) => String(a.serial) === sensor.serial)
-    const lat = Number(s?.position?.latitude ?? s?.latitude ?? s?.lat)
-    const lon = Number(s?.position?.longitude ?? s?.longitude ?? s?.lon)
-    return Number.isFinite(lat) && Number.isFinite(lon) ? [lat, lon] : DEFAULT_MAP_CENTER
-  }, [allSensors, sensor.serial])
+  // The spatial view opens where the data is, not on the selected sensor.
+  const mapCenter: [number, number] = useMemo(
+    () => (centerSensors && sensorCluster(centerSensors, { preferOnline: true })?.center) || DEFAULT_MAP_CENTER,
+    [centerSensors],
+  )
 
   const viewToggle = (
     <div className="btn-group btn-group-sm specmon-view-toggle" role="group" aria-label="Spectrum view">
@@ -397,10 +433,7 @@ export default function SpecMonPage() {
         type="button"
         className={`btn ${view === 'map' ? 'btn-primary active' : 'btn-default'}`}
         aria-pressed={view === 'map'}
-        onClick={() => {
-          setLiveMode(false)
-          setView('map')
-        }}
+        onClick={() => setView('map')}
       >
         <i className="glyphicon glyphicon-map-marker" /> Map view
       </button>
@@ -411,9 +444,14 @@ export default function SpecMonPage() {
     return (
       <div className="container-fluid">
         {viewToggle}
-        <Suspense fallback={<div className="es-loader" />}>
-          <SpecMonMapView center={mapCenter} occupancyThresholdDb={OCCUPANCY_THRESHOLD_DB} />
-        </Suspense>
+        {/* Wait for the sensor list so the map opens on the data, not on the default. */}
+        {centerSensors === null ? (
+          <div className="es-loader" />
+        ) : (
+          <Suspense fallback={<div className="es-loader" />}>
+            <SpecMonMapView center={mapCenter} occupancyThresholdDb={OCCUPANCY_THRESHOLD_DB} />
+          </Suspense>
+        )}
       </div>
     )
   }

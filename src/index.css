@@ -779,14 +779,84 @@ span.sw-default-value-header {
   cursor: pointer;
 }
 
+/* Map on the left (pinned while the list scrolls), list on the right, each in a
+   padded card on a light page, after the linxiang sensor explorer. */
+.sensors-page {
+  --sensors-top: 77px; /* sticky site header */
+  --sensors-pad: 28px;
+  min-height: calc(100vh - var(--sensors-top));
+  padding: var(--sensors-pad) 36px 40px;
+  background: #f7f8fa;
+}
+
+.has-sidebar .sensors-page {
+  --sensors-top: 0px; /* the top bar is hidden when the sidebar is shown */
+}
+
+.sensors-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 28%) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
 .sensors-map-col {
-  padding-left: 0;
-  padding-right: 0;
+  position: sticky;
+  top: calc(var(--sensors-top) + var(--sensors-pad));
+  height: calc(100vh - var(--sensors-top) - 2 * var(--sensors-pad));
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid #e3e5ee;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 4px 20px rgba(24, 25, 34, 0.05);
 }
 
 .sensors-map-col .leaflet-map {
   height: 100%;
   min-height: 0;
+}
+
+.sensors-list-col {
+  min-width: 0;
+  padding: 8px 16px 24px;
+  overflow-x: auto;
+  border: 1px solid #e3e5ee;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 4px 20px rgba(24, 25, 34, 0.05);
+  font-size: 13px;
+}
+
+/* Keep each row on one line (action buttons side by side); the card scrolls
+   sideways if the table is still wider than the space. */
+.sensors-list-col th,
+.sensors-list-col td {
+  padding-left: 6px;
+  padding-right: 6px;
+  white-space: nowrap;
+}
+
+.sensors-list-col td.text-right .btn + .btn {
+  margin-left: 4px;
+}
+
+@media (max-width: 991px) {
+  .sensors-page {
+    padding: 16px 16px 28px;
+  }
+
+  .sensors-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .sensors-map-col {
+    position: relative;
+    top: 0;
+    height: 320px;
+    min-height: 0;
+  }
 }
 
 /* Lightweight stand-in for angular-ui-bootstrap's $uibModal. */
@@ -1375,4 +1445,19 @@ span.sw-default-value-header {
 
 .h3-map .leaflet-tile-pane {
   filter: grayscale(1) brightness(1.06) contrast(0.85);
+}
+
+.route-loading {
+  padding: 48px 24px;
+  text-align: center;
+  color: #697a8a;
+}
+
+/* Every map on the site uses the same grey base so markers and data stand out. */
+.leaflet-tile-pane {
+  filter: grayscale(0.9) saturate(0.4) contrast(0.88) brightness(1.06);
+}
+
+.leaflet-container {
+  background: #eff0f4;
 }

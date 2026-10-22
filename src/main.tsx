@@ -4,6 +4,9 @@ import '@fortawesome/fontawesome-free/css/all.min.css'
 import './bootstrap/index.scss'
 import './index.css'
 import 'leaflet/dist/leaflet.css'
+import './header.css'
+import './sidebar.css'
+import './home.css'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(

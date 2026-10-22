@@ -29,6 +29,8 @@ type LeafletMapProps = {
   selectedId?: string
   /** Fit the viewport to all markers once they first load. */
   fitToMarkers?: boolean
+  /** Fly in to the clicked marker. */
+  zoomOnMarkerClick?: boolean
 }
 
 const EUROPE_CENTER: [number, number] = [50.0, 10.0]
@@ -89,6 +91,54 @@ function FitToMarkers({
   return null
 }
 
+const MARKER_CLICK_ZOOM = 14
+
+/** Renders the markers; a click can also fly the map in to the marker. */
+function Markers({
+  markers,
+  onMarkerClick,
+  zoomOnClick,
+}: {
+  markers: MapMarker[]
+  onMarkerClick?: (marker: MapMarker) => void
+  zoomOnClick: boolean
+}) {
+  const map = useMap()
+  return (
+    <>
+      {markers.map((m) => (
+        <Marker
+          key={String(m.id)}
+          position={[m.lat, m.lon]}
+          eventHandlers={{
+            click: () => {
+              onMarkerClick?.(m)
+              if (zoomOnClick) {
+                map.flyTo([m.lat, m.lon], Math.max(map.getZoom(), MARKER_CLICK_ZOOM), {
+                  duration: 0.8,
+                })
+              }
+            },
+          }}
+        >
+          <Popup>
+            <strong>{m.label ?? `Sensor ${m.id}`}</strong>
+            {m.online !== undefined ? (
+              <div>
+                <span
+                  className={m.online ? 'badge badge-online' : 'badge badge-offline'}
+                >
+                  {m.online ? 'Online' : 'Offline'}
+                </span>
+              </div>
+            ) : null}
+          </Popup>
+        </Marker>
+      ))}
+    </>
+  )
+}
+
 export default function LeafletMap({
   markers,
   height = 420,
@@ -98,6 +148,7 @@ export default function LeafletMap({
   zoom = DEFAULT_ZOOM,
   selectedId,
   fitToMarkers = false,
+  zoomOnMarkerClick = false,
 }: LeafletMapProps) {
   const styleHeight = typeof height === 'number' ? `${height}px` : height
 
@@ -116,30 +167,11 @@ export default function LeafletMap({
         <MapClickHandler onMapClick={onMapClick} />
         <SelectionFocus markers={markers} selectedId={selectedId} />
         <FitToMarkers markers={markers} enabled={fitToMarkers} />
-        {markers.map((m) => (
-          <Marker
-            key={String(m.id)}
-            position={[m.lat, m.lon]}
-            eventHandlers={{
-              click: () => onMarkerClick?.(m),
-            }}
-          >
-            <Popup>
-              <strong>{m.label ?? `Sensor ${m.id}`}</strong>
-              {m.online !== undefined ? (
-                <div>
-                  <span
-                    className={
-                      m.online ? 'badge badge-online' : 'badge badge-offline'
-                    }
-                  >
-                    {m.online ? 'Online' : 'Offline'}
-                  </span>
-                </div>
-              ) : null}
-            </Popup>
-          </Marker>
-        ))}
+        <Markers
+          markers={markers}
+          onMarkerClick={onMarkerClick}
+          zoomOnClick={zoomOnMarkerClick}
+        />
       </MapContainer>
     </div>
   )

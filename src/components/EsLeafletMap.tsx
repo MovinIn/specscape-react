@@ -4,10 +4,11 @@ import 'leaflet.markercluster'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import type { Sensor } from '../api/types'
+import { sensorCluster } from '../lib/sensorGeo'
 
-/** Public Mapbox token (set in .env.local) for the legacy es-leaflet-map style. */
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN ?? ''
-const TILES = `https://api.mapbox.com/styles/v1/electrosense/ck37c8r850txw1cqoolb5v136/tiles/256/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`
+/** Same light OSM tiles as the other maps; the shared grey filter in index.css styles them. */
+const TILES = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 const MARKER = (color: string) =>
   `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${color}.png`
 const ZOOM_AFTER_PAN = 18
@@ -24,6 +25,8 @@ type Props = {
   refresh?: unknown
   /** CSS height for the map container. Defaults to 420px. */
   height?: string | number
+  /** On first load, zoom in on the area holding most of the sensors. */
+  fitCluster?: boolean
 }
 
 function markerImage(s: MapSensor, rtc: boolean) {
@@ -40,12 +43,13 @@ const icon = (url: string) => L.icon({ iconUrl: url, iconSize: [21, 34] })
  * clustered markers, no popups (the page passes no `infowindow`), and a
  * click selects the sensor, zooms in and turns its marker yellow.
  */
-export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect, refresh, height = 420 }: Props) {
+export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect, refresh, height = 420, fitCluster = false }: Props) {
   const divRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null)
   const markersRef = useRef<Record<string, L.Marker & { sensor?: MapSensor }>>({})
   const onSelectRef = useRef(onSelect)
+  const fittedRef = useRef(false)
 
   useEffect(() => {
     onSelectRef.current = onSelect
@@ -68,7 +72,7 @@ export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect,
       polygonOptions: { weight: 1, color: '#c5c5c5', fillColor: '#5e9cff' },
     })
     map.addLayer(cluster)
-    L.tileLayer(TILES, { maxZoom: 18 }).addTo(map)
+    L.tileLayer(TILES, { maxZoom: 18, attribution: ATTRIBUTION }).addTo(map)
     mapRef.current = map
     clusterRef.current = cluster
     return () => {
@@ -125,7 +129,11 @@ export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect,
       }
     }
     const serials = Object.keys(current)
-    if ((!anyVisible || serials.length === 1) && serials.length > 0) {
+    const area = fitCluster && !fittedRef.current ? sensorCluster(sensors) : null
+    if (area) {
+      fittedRef.current = true
+      map.fitBounds(L.latLngBounds(area.points), { padding: [40, 40], maxZoom: 13 })
+    } else if ((!anyVisible || serials.length === 1) && serials.length > 0) {
       map.panTo(current[serials[0]].getLatLng())
     }
 
