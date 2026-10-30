@@ -15,6 +15,8 @@ type Props = {
   onEnd?: (value: number, high?: number) => void
   /** Text for the value bubbles (rzslider's `translate`); the raw number when omitted. */
   format?: (value: number) => string
+  /** Hide the value bubbles above the handles. */
+  hideBubbles?: boolean
   style?: CSSProperties
 }
 
@@ -37,6 +39,7 @@ export function RzSlider({
   onChange,
   onEnd,
   format,
+  hideBubbles = false,
   style,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -135,8 +138,8 @@ export function RzSlider({
       </span>
       {pointer(lowT, 'low')}
       {high !== undefined ? pointer(highT, 'high') : null}
-      {bubble(lowT, value, 'low')}
-      {high !== undefined ? bubble(highT, high, 'high') : null}
+      {hideBubbles ? null : bubble(lowT, value, 'low')}
+      {hideBubbles || high === undefined ? null : bubble(highT, high, 'high')}
       {showTicks ? (
         <ul className="rz-ticks">
           {ticks.map((v) => {

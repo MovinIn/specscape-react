@@ -58,7 +58,7 @@ export function Sidebar() {
 
   return (
     <aside className="side-nav" aria-label="Workspace navigation">
-      <Link to="/" className="side-brand" aria-label="SpecScape home">
+      <Link to="/sensors" className="side-brand" aria-label="SpecScape home">
         <img src="/images/specscape-globe-logo-cropped.png" alt="" width={32} height={32} />
         <span>Spec<span className="side-brand-accent">Scape</span></span>
       </Link>
@@ -74,13 +74,6 @@ export function Sidebar() {
       )}
       <div className="side-scroll">
         <nav aria-label={area === 'admin' ? 'Administration' : 'Research'}>
-          <Link
-            to="/"
-            className={link(pathname === '/')}
-            aria-current={pathname === '/' ? 'page' : undefined}
-          >
-            <i className="fa-solid fa-border-all" aria-hidden="true" /> Overview
-          </Link>
           <p className="side-label">WORKSPACE</p>
           {area === 'research' &&
             researchTools.map((tool) => (

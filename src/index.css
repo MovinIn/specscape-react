@@ -347,6 +347,27 @@ body {
   overflow: hidden;
 }
 
+.sensor-marker-wrap {
+  background: none;
+  border: 0;
+}
+
+.sensor-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+}
+
+.sensor-marker-selected {
+  box-shadow: 0 0 0 4px rgba(39, 128, 227, 0.55), 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
 .badge-online {
   background-color: #3fb618;
 }
@@ -779,8 +800,7 @@ span.sw-default-value-header {
   cursor: pointer;
 }
 
-/* Map on the left (pinned while the list scrolls), list on the right, each in a
-   padded card on a light page, after the linxiang sensor explorer. */
+/* Map on top, sensor list below, each in a padded card on a light page. */
 .sensors-page {
   --sensors-top: 77px; /* sticky site header */
   --sensors-pad: 28px;
@@ -795,16 +815,15 @@ span.sw-default-value-header {
 
 .sensors-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 28%) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   align-items: start;
 }
 
 .sensors-map-col {
-  position: sticky;
-  top: calc(var(--sensors-top) + var(--sensors-pad));
-  height: calc(100vh - var(--sensors-top) - 2 * var(--sensors-pad));
-  min-height: 360px;
+  position: relative;
+  height: 50vh;
+  min-height: 320px;
   overflow: hidden;
   border: 1px solid #e3e5ee;
   border-radius: 12px;
@@ -847,13 +866,10 @@ span.sw-default-value-header {
   }
 
   .sensors-layout {
-    grid-template-columns: 1fr;
     gap: 16px;
   }
 
   .sensors-map-col {
-    position: relative;
-    top: 0;
     height: 320px;
     min-height: 0;
   }

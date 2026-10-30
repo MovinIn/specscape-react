@@ -35,7 +35,7 @@ type Props = {
   noMoveEvent: boolean
   selFreq: number | null
   onSelect: WaterfallCallbacks['onSelect']
-  onRowData: (row: RowData) => void
+  onRowData?: (row: RowData) => void
   onZoom: WaterfallCallbacks['onZoom']
   onBboxChange: WaterfallCallbacks['onBboxChange']
   onMaxNumVals: WaterfallCallbacks['onMaxNumVals']
@@ -70,7 +70,7 @@ export function EsWaterfall(props: Props) {
     let hintTimer: number | undefined
     const engine = new WaterfallEngine(canvas, dataCanvas, {
       onSelect: (sel) => propsRef.current.onSelect(sel),
-      onRowData: (row) => propsRef.current.onRowData(row),
+      onRowData: (row) => propsRef.current.onRowData?.(row),
       onZoom: (...a) => propsRef.current.onZoom(...a),
       onBboxChange: (...a) => propsRef.current.onBboxChange(...a),
       onMaxNumVals: (v) => propsRef.current.onMaxNumVals(v),
@@ -186,6 +186,7 @@ export function EsWaterfall(props: Props) {
           <div style={{ display: 'flex', flexDirection: 'row', height: WATERFALL_HEIGHT }}>
             <RzSlider
               vertical
+              hideBubbles
               value={colorLow}
               high={colorHigh}
               floor={SLIDER_FLOOR}

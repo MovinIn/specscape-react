@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { AuthProvider } from './auth/AuthContext'
+import { AuthProvider, useAuth } from './auth/AuthContext'
 import { RequireAdmin, RequireAuth } from './auth/RequireAuth'
 import { NotifierProvider } from './components/Notifier'
 import { Layout } from './layout/Layout'
@@ -46,12 +46,19 @@ function Fallback() {
   return <div className="loading-screen">Loading…</div>
 }
 
+function HomeRoute() {
+  const { authenticated, loading } = useAuth()
+  if (loading) return <Fallback />
+  if (authenticated) return <Navigate to="/sensors" replace />
+  return <LandingPage />
+}
+
 function AppRoutes() {
   return (
     <Suspense fallback={<Fallback />}>
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<LandingPage />} />
+          <Route index element={<HomeRoute />} />
 
           <Route path="contribute" element={<ContributePage />} />
           <Route path="faq" element={<FaqPage />} />

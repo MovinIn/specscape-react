@@ -131,13 +131,12 @@ export default function SpecMonPage() {
   /** The last /spectrum/aggregated response, with its own start/resolution. */
   const [spec, setSpec] = useState<(WaterfallData & { bands?: AggregatedSpectrum['bands'] }) | null>(null)
   const matrix: SpectrumMatrix | null = spec?.values ?? null
-  const [barPlotData, setBarPlotData] = useState<RowData | null>(null)
   /** Plot area in pixels, reported by the waterfall; drives the zoom resolution. */
   const [maxNumVals, setMaxNumVals] = useState<[number, number]>([768, 60])
   const [colorprops, setColorprops] = useState({ median: -5000, high: 4000 })
 
   const [showBarplot, setShowBarplot] = useState(true)
-  const [showOccupancy, setShowOccupancy] = useState(true)
+  const [showOccupancy, setShowOccupancy] = useState(false)
   const [selFreq, setSelFreq] = useState<number | null>(null)
   const [selSnr, setSelSnr] = useState<number | null>(null)
   const [selTime, setSelTime] = useState<Date | null>(null)
@@ -207,8 +206,6 @@ export default function SpecMonPage() {
       const fr = opts?.freqRes ?? freqRes
       const maxTime = opts?.maxTime ?? new Date(st.getTime() + 3600_000)
 
-      // legacy updateSelection clears the bar plot while fetching
-      setBarPlotData(null)
       setLoading(true)
       setIsError(false)
       setStatusMessage('')
@@ -270,6 +267,26 @@ export default function SpecMonPage() {
     return () => window.clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveMode, loading])
+
+  /** SNR graph: per-frequency mean over every time row in the waterfall's window. */
+  const barPlotData: RowData | null = useMemo(() => {
+    if (!spec || !matrix) return null
+    const nFreq = matrix[0]?.length ?? 0
+    const values: (number | null)[] = []
+    for (let f = 0; f < nFreq; f++) {
+      let sum = 0
+      let n = 0
+      for (const row of matrix) {
+        const v = row[f]
+        if (typeof v === 'number' && Number.isFinite(v)) {
+          sum += v
+          n++
+        }
+      }
+      values.push(n ? sum / n : null)
+    }
+    return { startFreq: spec.startFreq, maxFreq: spec.maxFreq, freqRes: spec.freqRes, values }
+  }, [spec, matrix])
 
   const occupancy = useMemo(
     () => (matrix ? occupancyPercents(matrix, OCCUPANCY_THRESHOLD_DB) : null),
@@ -658,7 +675,6 @@ export default function SpecMonPage() {
                 setSelTime(sel?.time ?? null)
                 setSelSnr(sel?.snr ?? null)
               }}
-              onRowData={setBarPlotData}
               onZoom={onZoom}
               onBboxChange={onBboxChange}
               onMaxNumVals={setMaxNumVals}
@@ -681,7 +697,7 @@ export default function SpecMonPage() {
 
           <button
             type="button"
-            className="btn btn-sm pull-right"
+            className="btn btn-default btn-sm pull-right"
             onClick={() => setShowOccupancy((v) => !v)}
           >
             {showOccupancy ? 'Hide' : 'Show'} Occupancy
@@ -711,7 +727,7 @@ export default function SpecMonPage() {
 
           <button
             type="button"
-            className="btn btn-sm pull-right"
+            className="btn btn-default btn-sm pull-right"
             onClick={() => setShowBarplot((v) => !v)}
           >
             {showBarplot ? 'Hide' : 'Show'} Spectrum

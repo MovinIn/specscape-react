@@ -18,6 +18,9 @@ type Props = {
 }
 
 const HEIGHT = 250
+/** Legend canvas width; with the 44px slider it matches the waterfall's side column (154px). */
+const LEGEND_WIDTH = 110
+const SIDE_WIDTH = 44 + LEGEND_WIDTH
 const FONT = '"Lucida Grande", "Lucida Sans Unicode", Arial, Helvetica, sans-serif'
 
 /**
@@ -156,11 +159,21 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     const { min, max } = range.current
-    const legendH = canvas.height
+    // Draw at device resolution; the canvas keeps its CSS size across redraws.
+    const legendW = Number(canvas.dataset.w ?? canvas.width)
+    const legendH = Number(canvas.dataset.h ?? canvas.height)
+    canvas.dataset.w = String(legendW)
+    canvas.dataset.h = String(legendH)
+    const dpr = Math.max(2, window.devicePixelRatio || 1)
+    canvas.width = Math.round(legendW * dpr)
+    canvas.height = Math.round(legendH * dpr)
+    canvas.style.width = `${legendW}px`
+    canvas.style.height = `${legendH}px`
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, canvas.width, legendH)
-    ctx.font = '10px monospace'
-    ctx.fillStyle = '#999999'
+    ctx.fillRect(0, 0, legendW, legendH)
+    ctx.font = '12px Verdana, sans-serif'
+    ctx.fillStyle = '#000000'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
     ctx.fillText(`${max} dB`, 2, 2)
@@ -168,18 +181,19 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
     ctx.fillText(`${min} dB`, 2, legendH - 2)
     // draw tick marks at every 10 dB
     const span = max - min || 1
-    ctx.strokeStyle = '#cccccc'
+    ctx.strokeStyle = '#000000'
     ctx.lineWidth = 1
     for (let v = Math.ceil(min / 10) * 10; v <= max; v += 10) {
       const yy = legendH - ((v - min) / span) * legendH
       ctx.beginPath()
       ctx.moveTo(0, yy)
-      ctx.lineTo(canvas.width, yy)
+      ctx.lineTo(legendW, yy)
       ctx.stroke()
-      if (v !== min && v !== max) {
-        ctx.fillStyle = '#666666'
-        ctx.textBaseline = 'middle'
-        ctx.fillText(`${v}`, 2, yy)
+      // label sits just above its line, and is skipped where it would touch an end label
+      if (v !== min && v !== max && yy > 18 && yy < legendH - 18) {
+        ctx.fillStyle = '#000000'
+        ctx.textBaseline = 'bottom'
+        ctx.fillText(`${v}`, 2, yy - 2)
       }
     }
   }
@@ -196,7 +210,7 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const spacer = Math.max(0, sliderWidth - 73)
+  const spacer = Math.max(0, sliderWidth)
 
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'row', alignItems: 'stretch' }}>
@@ -204,10 +218,11 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
         // Vertical range slider + dB legend, mirroring the waterfall slider layout
         <div
           id="es-power-slider-container"
-          style={{ display: 'flex', flexDirection: 'row', height: HEIGHT, flexShrink: 0 }}
+          style={{ display: 'flex', flexDirection: 'row', height: HEIGHT, flex: `0 0 ${SIDE_WIDTH}px`, width: SIDE_WIDTH }}
         >
           <RzSlider
             vertical
+            hideBubbles
             value={sliderLow}
             high={sliderHigh}
             floor={-100}
@@ -216,12 +231,12 @@ export function LivePowerLevels({ ref, upperThreshold, lowerThreshold, sliderWid
               setSliderLow(lo)
               if (hi !== undefined) setSliderHigh(hi)
             }}
-            style={{ flex: '1 1 auto', width: 40 }}
+            style={{ flex: '1 1 auto' }}
           />
           <canvas
             ref={legendCanvasRef}
             id="es-power-legend-canvas"
-            width={60}
+            width={LEGEND_WIDTH}
             height={HEIGHT}
             style={{ display: 'block' }}
           />

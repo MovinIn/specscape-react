@@ -631,23 +631,35 @@ export function drawColorLegend(
   const valMax = colorhigh
   const colors = makeColorScale(colorlow, colorhigh)
 
-  const legendHeight = canvas.height
-  const legendWidth = canvas.width
+  // Render at device resolution so the text and gradient stay sharp; the
+  // canvas keeps its CSS size, remembered in data attributes across redraws.
+  const legendWidth = Number(canvas.dataset.w ?? canvas.width)
+  const legendHeight = Number(canvas.dataset.h ?? canvas.height)
+  canvas.dataset.w = String(legendWidth)
+  canvas.dataset.h = String(legendHeight)
+  const dpr = Math.max(2, window.devicePixelRatio || 1)
+  canvas.width = Math.round(legendWidth * dpr)
+  canvas.height = Math.round(legendHeight * dpr)
+  canvas.style.width = `${legendWidth}px`
+  canvas.style.height = `${legendHeight}px`
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, legendWidth, legendHeight)
 
   const textX = 35
-  const txt = `${scaleMax} dB`
-  ctx.fillStyle = '#999999'
-  const m = ctx.measureText(txt)
-  const ascent = m.fontBoundingBoxAscent || 10
-  ctx.fillText(txt, textX, ascent)
-  ctx.fillText(`${scaleMin} dB`, textX, legendHeight)
+  ctx.font = '12px Verdana, sans-serif'
+  ctx.textBaseline = 'alphabetic'
+  ctx.fillStyle = '#000000'
+  const ascent = 10
+  ctx.fillText(`${scaleMax} dB`, textX, ascent)
+  ctx.fillText(`${scaleMin} dB`, textX, legendHeight - 2)
 
   const range = scaleMax - scaleMin
   let upperLabelDrawn = false
   let lowerLabelDrawn = false
-  for (let i = 0; i < legendHeight; i++) {
+  const rowH = 1 / dpr
+  for (let i = 0; i < legendHeight; i += rowH) {
     const v = scaleMax - (range / legendHeight) * i
     if (v < valMax && !upperLabelDrawn && valMax < scaleMax) {
       ctx.fillStyle = '#000000'
@@ -661,6 +673,6 @@ export function drawColorLegend(
     } else {
       ctx.fillStyle = colors(v)
     }
-    ctx.fillRect(10, i, 20, 1)
+    ctx.fillRect(10, i, 20, rowH + 0.01)
   }
 }

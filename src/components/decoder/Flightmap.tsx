@@ -54,6 +54,8 @@ function sprite(name: string) {
 
 const iconCache: Record<string, L.Icon> = {}
 
+const PLANE_COLOR = '#ff2d2d'
+
 /** HybridMap.getFlightmarkerImageId: 12° heading steps, 3 sizes by zoom, white/grey by ground state. */
 function planeIcon(state: StateVector, zoom: number): L.Icon {
   const heading0 = state[10]
@@ -89,7 +91,16 @@ function planeIcon(state: StateVector, zoom: number): L.Icon {
   canvas.width = size
   canvas.height = size
   const loaded = img.complete && img.naturalWidth > 0
-  if (loaded) canvas.getContext('2d')!.drawImage(img, left, top, size, size, 0, 0, size, size)
+  if (loaded) {
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(img, left, top, size, size, 0, 0, size, size)
+    if (!state[8]) {
+      // tint airborne planes so they stand out against the map tiles
+      ctx.globalCompositeOperation = 'source-atop'
+      ctx.fillStyle = PLANE_COLOR
+      ctx.fillRect(0, 0, size, size)
+    }
+  }
   const icon = L.icon({ iconUrl: canvas.toDataURL(), iconSize: [size, size], iconAnchor: [size / 2, size / 2] })
   if (loaded) iconCache[id] = icon
   return icon

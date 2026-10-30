@@ -23,6 +23,11 @@ type Props = {
 }
 
 const HEIGHT = 250
+/** Frequency-axis header above the waterfall; the colour scale starts below it. */
+const HEADER_HEIGHT = 25
+/** Colour legend canvas width; with the 44px slider it fills SIDE_WIDTH (shared with LivePowerLevels). */
+const LEGEND_WIDTH = 110
+const SIDE_WIDTH = 44 + LEGEND_WIDTH
 
 /** Port of the live-waterfall component (streaming/live-waterfall.js). */
 export function LiveWaterfall(props: Props) {
@@ -166,38 +171,57 @@ export function LiveWaterfall(props: Props) {
     const colors = st.current.colors
     const valQ1 = colorProp
     const valMax = colorPropHigh
-    const legendHeight = canvas.height
+    // Draw at device resolution; the canvas keeps its CSS size across redraws.
+    const legendWidth = Number(canvas.dataset.w ?? canvas.width)
+    const legendHeight = Number(canvas.dataset.h ?? canvas.height)
+    canvas.dataset.w = String(legendWidth)
+    canvas.dataset.h = String(legendHeight)
+    const dpr = Math.max(2, window.devicePixelRatio || 1)
+    canvas.width = Math.round(legendWidth * dpr)
+    canvas.height = Math.round(legendHeight * dpr)
+    canvas.style.width = `${legendWidth}px`
+    canvas.style.height = `${legendHeight}px`
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, canvas.width, legendHeight)
+    ctx.fillRect(0, 0, legendWidth, legendHeight)
     const textX = 35
-    const txt = '0 dB/Hz'
-    ctx.fillStyle = '#999999'
-    const m = ctx.measureText(txt)
-    const ascent = m.fontBoundingBoxAscent || 10
-    ctx.fillText(txt, textX, ascent)
-    ctx.fillText('-50 dB/Hz', textX, legendHeight)
+    ctx.font = '12px Verdana, sans-serif'
+    ctx.textBaseline = 'alphabetic'
+    ctx.fillStyle = '#000000'
+    const ascent = 10
+    const LABEL_GAP = 15 // minimum baseline distance between two labels
+    const topY = ascent
+    const bottomY = legendHeight - 2
+    ctx.fillText('0 dB/Hz', textX, topY)
+    ctx.fillText('-50 dB/Hz', textX, bottomY)
 
     let upper = 0
     let lower = 1
     let upperDrawn = false
     let lowerDrawn = false
-    for (let i = 0; i < legendHeight; i++) {
+    let upperY = topY
+    const rowH = 1 / dpr
+    for (let i = 0; i < legendHeight; i += rowH) {
       const v = 0 - (50 / legendHeight) * i
       if (v < valMax && !upperDrawn && valMax < 0) {
         ctx.fillStyle = '#000000'
-        ctx.fillText(`${valMax} dB`, textX, Math.max(ascent * 2, i + ascent / 2))
+        // keep clear of the 0 dB/Hz label
+        upperY = Math.max(topY + LABEL_GAP, i + ascent / 2)
+        ctx.fillText(`${valMax} dB`, textX, upperY)
         upperDrawn = true
         upper = i / legendHeight
       } else if (v < valQ1 && !lowerDrawn) {
         ctx.fillStyle = '#000000'
-        ctx.fillText(`${valQ1} dB`, textX, Math.min(legendHeight - ascent, i + ascent / 2))
+        // keep clear of the -50 dB/Hz label and the upper threshold label
+        const lowerY = Math.max(upperY + LABEL_GAP, Math.min(bottomY - LABEL_GAP, i + ascent / 2))
+        ctx.fillText(`${valQ1} dB`, textX, lowerY)
         lowerDrawn = true
         ctx.fillStyle = '#ffffff'
         lower = i / legendHeight
       } else {
         ctx.fillStyle = colors(v)
       }
-      ctx.fillRect(10, i, 20, 1)
+      ctx.fillRect(10, i, 20, rowH + 0.01)
     }
     propsRef.current.onThresholds(upper, lower)
   }, [colorProp, colorPropHigh])
@@ -248,15 +272,18 @@ export function LiveWaterfall(props: Props) {
 
   return (
     <>
-      <div className="row">
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', width: '100%' }}>
         <div
           ref={sliderColRef}
-          className={showSlider ? 'col-sm-1' : 'col-sm-0 hidden'}
+          className={showSlider ? undefined : 'hidden'}
           id="es-waterfall-slider-container"
+          // fixed width: slider (44px) + legend canvas (110px), so labels never spill into the waterfall
+          style={{ flex: `0 0 ${SIDE_WIDTH}px`, width: SIDE_WIDTH, marginTop: HEADER_HEIGHT }}
         >
           <div style={{ display: 'flex', flexDirection: 'row', height: HEIGHT }}>
             <RzSlider
               vertical
+              hideBubbles
               value={colorProp}
               high={colorPropHigh}
               floor={-50}
@@ -267,15 +294,15 @@ export function LiveWaterfall(props: Props) {
               }}
               style={{ flex: '1 1 auto' }}
             />
-            <canvas ref={colorLegendRef} id="es-color-legend-container" width={80} height={HEIGHT} />
+            <canvas ref={colorLegendRef} id="es-color-legend-container" width={LEGEND_WIDTH} height={HEIGHT} />
           </div>
         </div>
-        <div className={showSlider ? 'col-sm-11' : 'col-sm-12'}>
+        <div style={{ flex: '1 1 0', minWidth: 0 }}>
           <div style={{ width: '100%', minHeight: HEIGHT }}>
             <canvas
               ref={legendRef}
               id="es-waterfall-legend-1"
-              height={25}
+              height={HEADER_HEIGHT}
               style={{ backgroundColor: '#ffffff', marginBottom: 0, display: 'block' }}
             />
             <canvas

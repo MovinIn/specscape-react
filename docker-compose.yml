@@ -1,0 +1,21 @@
+services:
+  web:
+    build:
+      context: .
+      args:
+        VITE_RECAPTCHA_SITE_KEY: ${VITE_RECAPTCHA_SITE_KEY:-}
+        VITE_MAPBOX_TOKEN: ${VITE_MAPBOX_TOKEN:-}
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    environment:
+      # Where /api is forwarded. Defaults to the live backend.
+      API_UPSTREAM: ${API_UPSTREAM:-https://specscape.org}
+      API_HOST: ${API_HOST:-specscape.org}
+      # Path the API lives under on the upstream. "/api/" keeps the prefix
+      # (specscape.org); use "/" for a backend that serves from its root.
+      API_PATH: ${API_PATH:-/api/}
+      # Production (HTTPS): leave as "off".
+      # Local http://localhost testing: set to "~ nosecure samesite=lax" so
+      # the login cookie is accepted over plain http.
+      COOKIE_FLAGS: ${COOKIE_FLAGS:-off}
+    restart: unless-stopped

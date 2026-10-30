@@ -5,19 +5,18 @@ import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import type { Sensor } from '../api/types'
 import { sensorCluster } from '../lib/sensorGeo'
+import { sensorIcon, type SensorState } from '../lib/sensorIcon'
 
 /** Same light OSM tiles as the other maps; the shared grey filter in index.css styles them. */
 const TILES = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
 const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-const MARKER = (color: string) =>
-  `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${color}.png`
 const ZOOM_AFTER_PAN = 18
 
 export type MapSensor = Sensor & { rtcStatus?: string; connected?: boolean }
 
 type Props = {
   sensors: MapSensor[]
-  /** Color markers by rtcStatus (ready = green, otherwise yellow). */
+  /** Color markers by rtcStatus (ready = green, otherwise amber). */
   rtc?: boolean
   scrolling?: boolean
   onSelect?: (serial: string) => void
@@ -29,14 +28,12 @@ type Props = {
   fitCluster?: boolean
 }
 
-function markerImage(s: MapSensor, rtc: boolean) {
-  if (rtc) return MARKER(s.rtcStatus === 'ready' ? 'green' : 'yellow')
-  if (s.sensing) return MARKER('green')
-  if (s.connected) return MARKER('grey')
-  return MARKER('blue')
+function sensorState(s: MapSensor, rtc: boolean): SensorState {
+  if (rtc) return s.rtcStatus === 'ready' ? 'online' : 'idle'
+  if (s.sensing) return 'online'
+  if (s.connected) return 'idle'
+  return 'offline'
 }
-
-const icon = (url: string) => L.icon({ iconUrl: url, iconSize: [21, 34] })
 
 /**
  * Port of the es-leaflet-map component as the Spectrum Decoder uses it:
@@ -110,10 +107,13 @@ export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect,
       }
       if (prev) cluster.removeLayer(prev)
 
-      const marker = L.marker([lat, lon], { icon: icon(markerImage(s, rtc)) }) as L.Marker & {
+      const marker = L.marker([lat, lon], { icon: sensorIcon(sensorState(s, rtc)) }) as L.Marker & {
         sensor?: MapSensor
       }
       marker.sensor = s
+      const tip = document.createElement('span')
+      tip.textContent = s.name ? `${s.name} (${serial})` : `Sensor ${serial}`
+      marker.bindTooltip(tip, { direction: 'top', offset: [0, -16] })
       marker.on('click', () => selectSensor(serial))
       cluster.addLayer(marker)
       current[serial] = marker
@@ -145,9 +145,9 @@ export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect,
         m.setZoom(ZOOM_AFTER_PAN)
         m.panTo(marker.getLatLng())
       }
-      // no info windows on this page: highlight the selection instead
+      // no info windows on this page: halo the selection (status colour is kept)
       for (const [s, mk] of Object.entries(current)) {
-        mk.setIcon(icon(s === serial ? MARKER('yellow') : markerImage(mk.sensor!, rtc)))
+        mk.setIcon(sensorIcon(sensorState(mk.sensor!, rtc), s === serial))
       }
     }
   }, [sensors, rtc])

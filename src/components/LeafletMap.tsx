@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
+import { sensorIcon } from '../lib/sensorIcon'
 
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -110,6 +111,7 @@ function Markers({
         <Marker
           key={String(m.id)}
           position={[m.lat, m.lon]}
+          icon={sensorIcon(m.online === undefined ? 'unknown' : m.online ? 'online' : 'offline')}
           eventHandlers={{
             click: () => {
               onMarkerClick?.(m)
@@ -121,6 +123,9 @@ function Markers({
             },
           }}
         >
+          <Tooltip direction="top" offset={[0, -16]}>
+            {m.label ?? `Sensor ${m.id}`}
+          </Tooltip>
           <Popup>
             <strong>{m.label ?? `Sensor ${m.id}`}</strong>
             {m.online !== undefined ? (
