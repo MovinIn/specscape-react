@@ -18,6 +18,7 @@ const aboutLinks = [
 ]
 const adminLinks = [
   ['/campaign-management', 'Campaign management'],
+  ['/experiment-scheduling', 'Experiment scheduling'],
   ['/sensor-application-list', 'Sponsoring requests'],
   ['/sensor-application-statistics', 'Sponsoring statistics'],
   ['/spectrum-decoder-status', 'Signaling status'],

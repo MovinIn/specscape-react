@@ -3,6 +3,8 @@ import { api } from '../api/client'
 import type { Sensor } from '../api/types'
 import { EsSelFreq } from '../components/decoder/EsSelFreq'
 import { UibDatepickerPopup } from '../components/UibDatepickerPopup'
+import { ScheduleTabs } from '../components/scheduling/ScheduleTabs'
+import '../components/scheduling/scheduling.css'
 
 // Port of campaign-management.html / campaign-management.js. Note: on the live
 // server GET /api/campaigns/current answers 404 (captured 2026-10-02), so the
@@ -257,6 +259,7 @@ export default function CampaignPage() {
   return (
     <div className="container">
       <h1>Campaign Management</h1>
+      <ScheduleTabs />
 
       <div className="col-sm-12">
         <h2>Recent Campaigns</h2>

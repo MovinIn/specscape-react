@@ -13,11 +13,32 @@ import type {
   SignalingUserTime,
 } from './types'
 import { isHtmlPayload, mockGet } from './mock'
+import type {
+  Availability,
+  AvailabilityParams,
+  Booking,
+  BookingInput,
+} from './scheduleTypes'
 
 const API_ROOT = '/api'
 const useMock =
   import.meta.env.VITE_USE_MOCK_API === 'true' ||
   import.meta.env.VITE_USE_MOCK_API === '1'
+
+/**
+ * Experiment scheduling has no live backend yet (the lambda routes are not
+ * built), so it can be mocked on its own: VITE_USE_MOCK_SCHEDULE=true keeps
+ * login and sensors real while bookings use the in-memory mock.
+ */
+// VITE_USE_MOCK_SCHEDULE=false forces real scheduling calls even when the rest of the API is mocked
+// (used with the dev controller proxy, see dev/controller-dev-server/README.md).
+const scheduleForcedReal = import.meta.env.VITE_USE_MOCK_SCHEDULE === 'false'
+const useScheduleMock =
+  !scheduleForcedReal &&
+  (useMock ||
+    import.meta.env.VITE_USE_MOCK_SCHEDULE === 'true' ||
+    import.meta.env.VITE_USE_MOCK_SCHEDULE === '1')
+const scheduleMock = () => import('./scheduleMock')
 
 function getCookie(name: string): string | null {
   const match = document.cookie.match(
@@ -45,7 +66,7 @@ function fromMock<T>(path: string): T {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  if (useMock) {
+  if (useMock && !(scheduleForcedReal && path.startsWith('/schedule/'))) {
     return fromMock<T>(path)
   }
 
@@ -315,6 +336,52 @@ export const api = {
     })
   },
 
+  // ── Experiment scheduling (lambda routes to be built; see Scheduler_API walkthrough §7) ──
+
+  /** GET /schedule/bookings[?sensor=] → controller GET /task/list. */
+  listBookings(sensor?: string, mockHint?: { viewer?: string; sampleSerial?: string }) {
+    // mockHint only matters to the in-memory mock (it lets the example booking follow the signed-in user)
+    if (useScheduleMock) return scheduleMock().then((m) => m.list(sensor, mockHint))
+    return request<Booking[]>(`/schedule/bookings${qs({ sensor })}`)
+  },
+
+  /** POST /schedule/bookings → controller POST /task/add. */
+  addBooking(body: BookingInput) {
+    if (useScheduleMock) return scheduleMock().then((m) => m.add(body))
+    return request<{ message: string; id: number }>('/schedule/bookings', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  /** PUT /schedule/bookings/{id} → controller PUT /task/{id} (send the whole task). */
+  updateBooking(id: number, body: BookingInput) {
+    if (useScheduleMock) return scheduleMock().then((m) => m.update(id, body))
+    return request<{ message: string; id: number }>(`/schedule/bookings/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    })
+  },
+
+  /** DELETE /schedule/bookings/{id} → controller DELETE /task/{id}. */
+  deleteBooking(id: number) {
+    if (useScheduleMock) return scheduleMock().then((m) => m.remove(id))
+    return request<{ message: string }>(`/schedule/bookings/${id}`, { method: 'DELETE' })
+  },
+
+  /** GET /schedule/availability → controller GET /task/availability. */
+  getAvailability(p: AvailabilityParams) {
+    if (useScheduleMock) return scheduleMock().then((m) => m.availability(p))
+    return request<Availability>(
+      `/schedule/availability${qs({
+        sensors: p.sensors.join(','),
+        length: p.length,
+        from: p.from,
+        priority: p.priority,
+      })}`,
+    )
+  },
+
   contactInquiry(contact: ContactPayload) {
     return request('/contact', {
       method: 'POST',
@@ -372,6 +439,11 @@ export const api = {
   /** GET /user/list — all users (admin only). Read-only. */
   listUsers() {
     return request<AdminUser[]>('/user/list')
+  },
+
+  /** DELETE /user/{uid} — permanently delete a user (admin only). */
+  deleteUser(uid: string) {
+    return request<void>(`/user/${encodeURIComponent(uid)}`, { method: 'DELETE' })
   },
 
   getAccount() {

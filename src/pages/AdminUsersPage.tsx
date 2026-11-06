@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import type { AdminUser } from '../api/types'
+import { useAuth } from '../auth/AuthContext'
 
-// Read-only view of GET /user/list. No role column: the `admin` field this
-// endpoint returns is not populated (false even for known admins).
+// View of GET /user/list, with per-row delete via DELETE /user/{uid}. No role
+// column: the `admin` field this endpoint returns is not populated (false even
+// for known admins).
 
 type SortKey = 'fullName' | 'uid' | 'mail' | 'organization' | 'enabled'
 
@@ -29,6 +31,29 @@ export default function AdminUsersPage() {
   const [inactiveOnly, setInactiveOnly] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('uid')
   const [sortAsc, setSortAsc] = useState(true)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const { user: me } = useAuth()
+
+  async function deleteUser(u: AdminUser) {
+    if (!window.confirm(`Delete user "${u.uid}"? This cannot be undone.`)) return
+    setDeleting(u.uid)
+    setError(null)
+    try {
+      await api.deleteUser(u.uid)
+      setUsers((prev) => prev.filter((x) => x.uid !== u.uid))
+    } catch (e) {
+      const status = (e as { status?: number }).status
+      setError(
+        status === 403
+          ? `You are not allowed to delete "${u.uid}".`
+          : status === 404
+            ? `User "${u.uid}" was not found.`
+            : `Could not delete "${u.uid}".`,
+      )
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -139,12 +164,13 @@ export default function AdminUsersPage() {
                     </button>
                   </th>
                 ))}
+                <th />
               </tr>
             </thead>
             <tbody>
               {!loading && shown.length === 0 ? (
                 <tr>
-                  <td colSpan={COLUMNS.length} className="text-center">
+                  <td colSpan={COLUMNS.length + 1} className="text-center">
                     No items
                   </td>
                 </tr>
@@ -161,6 +187,18 @@ export default function AdminUsersPage() {
                     ) : (
                       <span className="label label-default">Inactive</span>
                     )}
+                  </td>
+                  <td className="text-right">
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-xs"
+                      disabled={deleting !== null || u.uid === me?.username}
+                      title={u.uid === me?.username ? 'You cannot delete your own account' : undefined}
+                      onClick={() => deleteUser(u)}
+                    >
+                      <span className="glyphicon glyphicon-trash" aria-hidden="true" />{' '}
+                      {deleting === u.uid ? 'Deleting…' : 'Delete'}
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -1,0 +1,117 @@
+/* Experiment scheduling page. Bootstrap 3 supplies panels, forms, buttons, alerts. */
+
+/* tabs: Bootstrap's .active lives on <li>; NavLink styles the <a> instead */
+.xs-tabs > li > a.xs-tab-active {
+  color: #555;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-bottom-color: transparent;
+  cursor: default;
+}
+
+.xs-intro { color: #727584; max-width: 70ch; margin-bottom: 20px; }
+.xs-step { color: #727584; font-weight: 400; margin-right: 6px; }
+
+/* sensor picker */
+.xs-sensor-list {
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid #e3e5ee;
+  border-radius: 4px;
+}
+.xs-sensor-group {
+  padding: 4px 10px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #727584;
+  background: #f7f8fb;
+  position: sticky;
+  top: 0;
+}
+.xs-sensor { display: block; padding: 6px 10px; margin: 0; font-weight: 400; cursor: pointer; border-top: 1px solid #f0f1f6; }
+.xs-sensor:hover { background: #f4f8fd; }
+.xs-sensor.is-disabled { opacity: 0.5; cursor: not-allowed; }
+.xs-sensor input { margin-right: 8px; }
+.xs-sensor small { color: #727584; margin-left: 4px; }
+.xs-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: #bbb; }
+.xs-dot.is-on { background: #3fb618; }
+.xs-count { float: right; font-size: 12px; color: #727584; }
+.xs-count.is-full { color: #ce3c36; font-weight: 600; }
+
+/* when row */
+.xs-when { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 8px; }
+.xs-when .form-group { margin: 0; }
+.xs-when label { display: block; font-size: 12px; color: #727584; font-weight: 400; margin-bottom: 2px; }
+.xs-daynav { display: flex; gap: 4px; }
+.xs-tz { font-size: 12px; color: #727584; margin: 0 0 10px; }
+
+/* availability hint */
+.xs-hint { padding: 8px 12px; border-radius: 4px; background: #f4f8fd; border: 1px solid #d5e5f7; margin: 10px 0; font-size: 13px; }
+.xs-hint.is-warn { background: #fff7ee; border-color: #ffd9b5; }
+.xs-hint .btn { margin-left: 8px; }
+.xs-busy { margin: 4px 0 0; padding: 0; list-style: none; font-size: 12px; color: #727584; }
+
+/* timeline */
+.xs-timeline { margin: 14px 0 6px; font-size: 12px; }
+.xs-axis, .xs-lane { display: flex; align-items: center; }
+.xs-label { flex: 0 0 110px; padding-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xs-track { position: relative; flex: 1; height: 28px; }
+.xs-axis .xs-track { height: 18px; }
+.xs-lane { margin-top: 6px; }
+.xs-lane .xs-track { background: #f7f8fb; border: 1px solid #e3e5ee; border-radius: 3px; overflow: hidden; }
+.xs-clickable { cursor: crosshair; }
+.xs-tick { position: absolute; transform: translateX(-50%); color: #727584; font-size: 11px; }
+.xs-tick:first-child { transform: none; }
+.xs-tick:last-child { transform: translateX(-100%); }
+.xs-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: #e8eaf1; }
+.xs-bar { position: absolute; top: 3px; bottom: 3px; border-radius: 3px; min-width: 2px; }
+.xs-mine { background: rgba(38, 117, 185, 0.55); border: 1px solid #2675b9; }
+.xs-other { background: #b9bdcb; border: 1px solid #9aa0b4; }
+.xs-live {
+  background: repeating-linear-gradient(45deg, rgba(255, 117, 24, 0.55) 0 5px, rgba(255, 117, 24, 0.25) 5px 10px);
+  border: 1px solid #ff7518;
+}
+.xs-open { border-right-style: dashed; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.xs-past { opacity: 0.45; }
+.xs-new { background: rgba(63, 182, 24, 0.35); border: 2px dashed #3fb618; z-index: 2; pointer-events: none; }
+.xs-new.xs-clash { background: rgba(206, 60, 54, 0.3); border-color: #ce3c36; }
+.xs-now { position: absolute; top: 0; bottom: 0; width: 2px; background: #ce3c36; z-index: 3; pointer-events: none; }
+.xs-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 0 0 110px; color: #727584; }
+.xs-key { display: inline-block; width: 14px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+.xs-text { margin: 10px 0 0; }
+.xs-text summary { cursor: pointer; color: #727584; }
+.xs-text ul { margin: 2px 0 6px 0; padding-left: 18px; }
+.xs-empty { padding: 14px 0; }
+
+/* measurement presets */
+.xs-preset { display: flex; gap: 8px; margin-bottom: 12px; }
+.xs-preset label {
+  flex: 1; margin: 0; padding: 8px 10px; font-weight: 400; cursor: pointer;
+  border: 1px solid #e3e5ee; border-radius: 4px;
+}
+.xs-preset label.is-on { border-color: #2675b9; background: #f4f8fd; }
+.xs-preset input { margin-right: 6px; }
+.xs-preset small { display: block; color: #727584; margin-left: 20px; }
+.xs-params { margin-top: 10px; font-size: 12px; }
+.xs-params pre { margin-top: 6px; font-size: 11px; }
+
+/* bookings table */
+.xs-status { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; background: #eceef4; color: #555; }
+.xs-status.is-Pending { background: #e4f0fb; color: #1c5a92; }
+.xs-status.is-Running { background: #e3f5db; color: #2b7d11; }
+.xs-status.is-Skipped { background: #fbeaea; color: #a52c27; }
+.xs-actions { white-space: nowrap; text-align: right; }
+.xs-actions .btn + .btn { margin-left: 4px; }
+
+.xs-submit { display: flex; gap: 8px; justify-content: flex-end; align-items: center; margin-top: 14px; }
+.xs-conflicts ul { margin: 6px 0; padding-left: 18px; }
+
+@media (max-width: 767px) {
+  .xs-label { flex-basis: 70px; }
+  .xs-legend { margin-left: 0; }
+  .xs-actions { white-space: normal; }
+}

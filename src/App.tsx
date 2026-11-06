@@ -35,6 +35,7 @@ const IqDatasetsPage = lazy(() => import('./pages/IqDatasetsPage'))
 const SpectrumDecoderPage = lazy(() => import('./pages/SpectrumDecoderPage'))
 const StreamingStatusPage = lazy(() => import('./pages/StreamingStatusPage'))
 const CampaignPage = lazy(() => import('./pages/CampaignPage'))
+const ExperimentSchedulingPage = lazy(() => import('./pages/ExperimentSchedulingPage'))
 const SponsoringListPage = lazy(() => import('./pages/SponsoringListPage'))
 const SponsoringStatsPage = lazy(() => import('./pages/SponsoringStatsPage'))
 const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage'))
@@ -173,6 +174,14 @@ function AppRoutes() {
               <RequireAdmin>
                 <CampaignPage />
               </RequireAdmin>
+            }
+          />
+          <Route
+            path="experiment-scheduling"
+            element={
+              <RequireAuth>
+                <ExperimentSchedulingPage />
+              </RequireAuth>
             }
           />
           <Route

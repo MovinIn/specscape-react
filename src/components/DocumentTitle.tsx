@@ -31,6 +31,7 @@ const TITLES: Record<string, string> = {
   '/spectrum-decoder': 'Spectrum Decoder · SpecScape',
   '/spectrum-decoder-status': 'Signaling Status · SpecScape',
   '/campaign-management': 'Campaigns · SpecScape',
+  '/experiment-scheduling': 'Experiment Scheduling · SpecScape',
   '/sensor-application-list': 'Sponsoring · SpecScape',
   '/sensor-application-statistics': 'Sponsoring Stats · SpecScape',
 }

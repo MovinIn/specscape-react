@@ -15,6 +15,7 @@ const researchTools = [
 const adminLinks = [
   ['/admin/users', 'Users', 'users'],
   ['/campaign-management', 'Campaign management', 'calendar-days'],
+  ['/experiment-scheduling', 'Experiment scheduling', 'calendar-check'],
   ['/sensor-application-list', 'Sponsoring requests', 'inbox'],
   ['/sensor-application-statistics', 'Sponsoring statistics', 'chart-pie'],
   ['/spectrum-decoder-status', 'Signaling status', 'tower-broadcast'],

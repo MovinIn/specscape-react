@@ -1,5 +1,5 @@
 import react from '@vitejs/plugin-react'
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, type ProxyOptions } from 'vite'
 
 /**
  * Auth depends on cookies (JSESSIONID + XSRF-TOKEN) that the API sets on
@@ -26,6 +26,29 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       proxy: {
+        // Dev only: with VITE_SCHEDULE_PROXY_TARGET set (e.g. http://127.0.0.1:8050), the
+        // scheduling routes the lambda will provide go straight to a controller's /task/* API.
+        // No login or owner checks happen here; the lambda adds those in production.
+        ...(env.VITE_SCHEDULE_PROXY_TARGET
+          ? ({
+              '^/api/schedule(/|$)': {
+                target: env.VITE_SCHEDULE_PROXY_TARGET,
+                changeOrigin: true,
+                configure: (proxy) => {
+                  proxy.on('proxyReq', (proxyReq, req) => {
+                    const u = new URL(req.url ?? '', 'http://localhost')
+                    const rest = u.pathname.replace(/^\/api\/schedule/, '')
+                    const byId = /^\/bookings\/(\d+)$/.exec(rest)
+                    let path: string | null = null
+                    if (rest === '/availability') path = '/task/availability'
+                    else if (rest === '/bookings') path = req.method === 'POST' ? '/task/add' : '/task/list'
+                    else if (byId) path = `/task/${byId[1]}`
+                    if (path) proxyReq.path = path + u.search
+                  })
+                },
+              },
+            } as Record<string, ProxyOptions>)
+          : {}),
         '^/api(/|$)': {
           target,
           changeOrigin: true,
