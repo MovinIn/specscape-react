@@ -9,6 +9,8 @@ import {
   type TimelineBar,
   type TimelineRow,
 } from '../components/scheduling/AvailabilityTimeline'
+import { useSearchParams } from 'react-router-dom'
+import { AreaPicker, parseArea, type Area } from '../components/scheduling/AreaPicker'
 import { BookingList } from '../components/scheduling/BookingList'
 import { ScheduleTabs } from '../components/scheduling/ScheduleTabs'
 import { SensorPicker } from '../components/scheduling/SensorPicker'
@@ -23,7 +25,6 @@ import {
   fmtClock,
   fmtLength,
   fmtRange,
-  lengthChoices,
   localMidnight,
   nextLocalMidnight,
   overlaps,
@@ -47,9 +48,12 @@ const COLLECTOR = {
 }
 
 const REFRESH_MS = 60_000
-const FALLBACK_SLOT_SECONDS = 3600
+const FALLBACK_SLOT_SECONDS = 900 // 15-minute start/length grid
+const MAX_SCRIPT_BYTES = 100_000 // shortcut: parameters travel in the booking body, so keep scripts small
 
-type Notice = { kind: 'success' | 'danger' | 'warning'; lines: string[] }
+const fmtBytes = (n: number) => (n < 1000 ? `${n} B` : `${(n / 1000).toFixed(1)} kB`)
+
+type Notice ={ kind: 'success' | 'danger' | 'warning'; lines: string[] }
 
 function scheduleError(err: unknown): ScheduleError {
   return err as ScheduleError
@@ -100,13 +104,13 @@ export default function ExperimentSchedulingPage() {
   const [sensors, setSensors] = useState<Sensor[]>([])
   const [bookings, setBookings] = useState<Booking[] | null>(null)
   const [listNotice, setListNotice] = useState<Notice | null>(null)
-  const [slotSec, setSlotSec] = useState(FALLBACK_SLOT_SECONDS)
+  const slotSec = FALLBACK_SLOT_SECONDS
   const [slotKnown, setSlotKnown] = useState(false)
 
   // form
   const [serials, setSerials] = useState<string[]>([])
   const [startMs, setStartMs] = useState<number | null>(null)
-  const [lengthSec, setLengthSec] = useState(3600)
+  const [lengthSec, setLengthSec] = useState(900)
   const [touched, setTouched] = useState(false)
   const [preset, setPreset] = useState<Preset>('psd')
   const [psdMin, setPsdMin] = useState(88_000_000)
@@ -115,6 +119,18 @@ export default function ExperimentSchedulingPage() {
   const [sampRate, setSampRate] = useState('2400000')
   const [monitorTime, setMonitorTime] = useState('10')
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [script, setScript] = useState<{ name: string; size: number; text: string } | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const byArea = searchParams.get('by') === 'area'
+  const [area, setArea] = useState<Area | null>(null)
+
+  /** Switching tabs starts the sensor choice over: the two tabs pick sensors differently. */
+  function switchMode(toArea: boolean) {
+    setSearchParams(toArea ? { by: 'area' } : {}, { replace: true })
+    setSerials([])
+    setArea(null)
+    setConflicts(null)
+  }
 
   // feedback
   const [availability, setAvailability] = useState<Availability | null>(null)
@@ -171,9 +187,8 @@ export default function ExperimentSchedulingPage() {
     api
       .getAvailability({ sensors: [String(sensors[0].serial)], length: 3600, priority: BOOKING_PRIORITY })
       .then(
-        (res) => {
+        () => {
           if (cancelled) return
-          setSlotSec(res.slotSeconds)
           setSlotKnown(true)
         },
         () => undefined,
@@ -216,7 +231,6 @@ export default function ExperimentSchedulingPage() {
             if (cancelled) return
             setAvailability(res)
             setAvailFailed(false)
-            setSlotSec(res.slotSeconds)
             setSlotKnown(true)
             if (!touched && editingId === null && res.earliestStart) {
               setStartMs(Date.parse(res.earliestStart))
@@ -243,10 +257,15 @@ export default function ExperimentSchedulingPage() {
   const stopMs = startMs === null ? null : startMs + lengthSec * 1000
   const day = ymd(startMs ?? Date.now())
   const startOptions = useMemo(() => slotStarts(day, slotSec), [day, slotSec])
-  const lengths = useMemo(() => {
-    const c = lengthChoices(slotSec)
-    return c.includes(lengthSec) ? c : [...c, lengthSec].sort((a, b) => a - b)
-  }, [slotSec, lengthSec])
+  const lenH = Math.floor(lengthSec / 3600)
+  const lenM = Math.floor((lengthSec % 3600) / 60)
+
+  /** Hours + minutes → seconds, kept between one slot and the 24 h maximum. */
+  function changeLength(h: number, m: number) {
+    const sec = Math.min(MAX_LENGTH_SECONDS, Math.max(slotSec, h * 3600 + m * 60))
+    setLengthSec(sec)
+    setConflicts(null)
+  }
   const now = Date.now()
 
   /** Overlaps with already-listed same-priority bookings: an early warning, the server still decides. */
@@ -264,7 +283,19 @@ export default function ExperimentSchedulingPage() {
     )
   }, [bookings, startMs, stopMs, serials, editingId])
 
-  const rows: TimelineRow[] = useMemo(() => {
+  /** Sensors already booked (same priority) during the chosen window; the area tab leaves these out. */
+  const busySerials = useMemo(() => {
+    const out = new Set<string>()
+    if (startMs === null || stopMs === null || !bookings) return out
+    for (const b of bookings) {
+      if (b.id === 1 || b.id === editingId || b.priority !== BOOKING_PRIORITY) continue
+      if (b.status !== 'Pending' && b.status !== 'Running') continue
+      if (overlaps({ startMs, stopMs }, spanOf(b))) b.sensors.forEach((s) => out.add(s))
+    }
+    return out
+  }, [bookings, startMs, stopMs, editingId])
+
+  const sensorRows: TimelineRow[] = useMemo(() => {
     const dayStart = localMidnight(day)
     const dayEnd = nextLocalMidnight(day)
     return serials.map((serial) => {
@@ -291,9 +322,20 @@ export default function ExperimentSchedulingPage() {
     })
   }, [serials, bookings, day, editingId, issuer, isAdmin, sensorName])
 
+  // An area booking can hold dozens of sensors, so the timeline shows them as one merged lane.
+  const rows: TimelineRow[] = useMemo(() => {
+    if (!byArea || sensorRows.length === 0) return sensorRows
+    const seen = new Set<string>()
+    const bars = sensorRows.flatMap((r) => r.bars).filter((b) => !seen.has(b.key) && seen.add(b.key))
+    return [{ serial: 'area', name: `Area · ${sensorRows.length} sensors`, bars }]
+  }, [byArea, sensorRows])
+
   const params = useMemo((): Record<string, string> => {
+    const extra: Record<string, string> = script ? { scriptName: script.name, script: script.text } : {}
+    if (byArea && area) extra.area = area.map((v) => v.toFixed(5)).join(',')
     if (preset === 'iq') {
       return {
+        ...extra,
         command: 'es_sensor',
         measurementType: 'IQ',
         sampRate,
@@ -303,8 +345,18 @@ export default function ExperimentSchedulingPage() {
         sslCollector: COLLECTOR.iq,
       }
     }
-    return { command: 'es_sensor', minfreq: String(psdMin), maxfreq: String(psdMax), sslCollector: COLLECTOR.psd }
-  }, [preset, sampRate, iqFreq, monitorTime, psdMin, psdMax])
+    return { ...extra, command: 'es_sensor', minfreq: String(psdMin), maxfreq: String(psdMax), sslCollector: COLLECTOR.psd }
+  }, [preset, sampRate, iqFreq, monitorTime, psdMin, psdMax, script, byArea, area])
+
+  async function chooseScript(f: File | undefined) {
+    if (!f) return setScript(null)
+    if (f.size > MAX_SCRIPT_BYTES) {
+      setNotice({ kind: 'danger', lines: [`The script is too large (max ${MAX_SCRIPT_BYTES / 1000} kB).`] })
+      return
+    }
+    setScript({ name: f.name, size: f.size, text: await f.text() })
+    setNotice(null)
+  }
 
   const visibleBookings = useMemo(
     () => (bookings ?? []).filter((b) => b.id !== 1 && (b.issuer === issuer || (isAdmin && showAll))),
@@ -343,6 +395,9 @@ export default function ExperimentSchedulingPage() {
     setLengthSec(Math.round((e - s) / 1000))
     setTouched(true)
     const p = b.parameters
+    const savedArea = parseArea(p.area)
+    setSearchParams(savedArea ? { by: 'area' } : {}, { replace: true })
+    setArea(savedArea)
     if (p.measurementType === 'IQ') {
       setPreset('iq')
       setIqFreq(Number(p.minfreq) || 1_090_000_000)
@@ -384,8 +439,10 @@ export default function ExperimentSchedulingPage() {
 
   function validate(): string[] {
     const errs: string[] = []
-    if (serials.length < 1) errs.push('Pick at least one sensor.')
-    if (serials.length > MAX_SENSORS) errs.push(`Pick at most ${MAX_SENSORS} sensors.`)
+    // shortcut: an empty list means "all sensors" to the controller, so mobile-only area bookings wait for the backend (MobileAreaBookings.md).
+    if (serials.length < 1) errs.push(byArea && area ? 'The area needs at least one free fixed sensor for now.' : 'Pick at least one sensor.')
+    if (byArea && !area) errs.push('Draw an area on the map.')
+    if (!byArea && serials.length > MAX_SENSORS) errs.push(`Pick at most ${MAX_SENSORS} sensors.`)
     if (startMs === null) errs.push('Pick a start time.')
     else if (startMs < Date.now()) errs.push('The start time is in the past.')
     if (preset === 'psd') {
@@ -459,7 +516,7 @@ export default function ExperimentSchedulingPage() {
   return (
     <div className="container">
       <h1>Experiment Scheduling</h1>
-      <ScheduleTabs />
+      <ScheduleTabs byArea={byArea} onChange={switchMode} />
       <p className="xs-intro">
         Reserve sensors for a block of time. Bookings run on a fixed slot grid, so the earliest free time is
         suggested for you. Anything you book starts and stops on its own.
@@ -494,20 +551,42 @@ export default function ExperimentSchedulingPage() {
               <button type="button" className="btn btn-default btn-sm" onClick={useNextFreeSlot}>
                 Use next free slot
               </button>
+              {byArea && conflicts.some((c) => c.sensors.length > 0) && (
+                <button type="button" className="btn btn-default btn-sm" style={{ marginLeft: 8 }}
+                  onClick={() => {
+                    const taken = new Set(conflicts.flatMap((c) => c.sensors))
+                    setSerials((s) => s.filter((x) => !taken.has(x)))
+                    setConflicts(null)
+                    setNotice({ kind: 'success', lines: ['The booked sensors were dropped. Book again to reserve the rest.'] })
+                  }}>
+                  Drop the booked sensors
+                </button>
+              )}
             </div>
           )}
         </div>
       )}
 
       <form onSubmit={submit}>
+        {byArea && (
+          <div className="panel panel-default">
+            <div className="panel-heading">Area</div>
+            <div className="panel-body">
+              <AreaPicker sensors={sensors} busy={busySerials} area={area} onArea={setArea} selected={serials}
+                onChange={(s) => { setSerials(s); setConflicts(null) }} disabled={submitting} />
+            </div>
+          </div>
+        )}
         <div className="row">
           <div className="col-md-5">
-            <div className="panel panel-default">
-              <div className="panel-heading">Sensors</div>
-              <div className="panel-body">
-                <SensorPicker sensors={sensors} selected={serials} onChange={(s) => { setSerials(s); setConflicts(null) }} username={user?.username} disabled={submitting} />
+            {!byArea && (
+              <div className="panel panel-default">
+                <div className="panel-heading">Sensors</div>
+                <div className="panel-body">
+                  <SensorPicker sensors={sensors} selected={serials} onChange={(s) => { setSerials(s); setConflicts(null) }} username={user?.username} disabled={submitting} />
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="panel panel-default">
               <div className="panel-heading">Measurement</div>
@@ -594,11 +673,17 @@ export default function ExperimentSchedulingPage() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label htmlFor="xs-len">Length</label>
-                    <select id="xs-len" className="form-control" value={lengthSec} disabled={submitting}
-                      onChange={(e) => { setLengthSec(Number(e.target.value)); setConflicts(null) }}>
-                      {lengths.map((l) => <option key={l} value={l}>{fmtLength(l)}</option>)}
-                    </select>
+                    <label htmlFor="xs-len-h">Length</label>
+                    <div className="xs-len">
+                      <select id="xs-len-h" className="form-control" aria-label="Hours" value={lenH} disabled={submitting}
+                        onChange={(e) => changeLength(Number(e.target.value), lenM)}>
+                        {Array.from({ length: 25 }, (_, h) => <option key={h} value={h}>{h} h</option>)}
+                      </select>
+                      <select id="xs-len-m" className="form-control" aria-label="Minutes" value={lenM} disabled={submitting || lenH === 24}
+                        onChange={(e) => changeLength(lenH, Number(e.target.value))}>
+                        {[0, 15, 30, 45].map((m) => <option key={m} value={m}>{m} min</option>)}
+                      </select>
+                    </div>
                   </div>
                 </div>
                 <p className="xs-tz">
@@ -667,6 +752,31 @@ export default function ExperimentSchedulingPage() {
                     {submitting ? 'Saving…' : editingId === null ? 'Book sensors' : 'Save changes'}
                   </button>
                 </div>
+              </div>
+            </div>
+
+            <div className="panel panel-default">
+              <div className="panel-heading">Script</div>
+              <div className="panel-body">
+                {script ? (
+                  <div className="xs-file is-set">
+                    
+                    <span className="xs-file-name" title={script.name}>{script.name}</span>
+                    <span className="xs-file-size">{fmtBytes(script.size)}</span>
+                    <button type="button" className="xs-file-x" aria-label={`Remove ${script.name}`}
+                      disabled={submitting} onClick={() => setScript(null)}>×</button>
+                  </div>
+                ) : (
+                  <div className="xs-file">
+                    {/* hidden input; remounts after Remove since it only renders when no script is set */}
+                    <label className="xs-file-btn">
+                      Choose file
+                      <input type="file" style={{ display: 'none' }} disabled={submitting} onChange={(e) => void chooseScript(e.target.files?.[0])} />
+                    </label>
+                    <span className="xs-file-name">No file chosen<small>Up to {MAX_SCRIPT_BYTES / 1000} kB</small></span>
+                  </div>
+                )}
+                <p className="help-block">Sent with the booking and run on the sensors when it starts.</p>
               </div>
             </div>
           </div>

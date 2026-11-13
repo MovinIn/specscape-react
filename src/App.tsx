@@ -34,7 +34,6 @@ const RankingPage = lazy(() => import('./pages/RankingPage'))
 const IqDatasetsPage = lazy(() => import('./pages/IqDatasetsPage'))
 const SpectrumDecoderPage = lazy(() => import('./pages/SpectrumDecoderPage'))
 const StreamingStatusPage = lazy(() => import('./pages/StreamingStatusPage'))
-const CampaignPage = lazy(() => import('./pages/CampaignPage'))
 const ExperimentSchedulingPage = lazy(() => import('./pages/ExperimentSchedulingPage'))
 const SponsoringListPage = lazy(() => import('./pages/SponsoringListPage'))
 const SponsoringStatsPage = lazy(() => import('./pages/SponsoringStatsPage'))
@@ -168,14 +167,8 @@ function AppRoutes() {
               </RequireAdmin>
             }
           />
-          <Route
-            path="campaign-management"
-            element={
-              <RequireAdmin>
-                <CampaignPage />
-              </RequireAdmin>
-            }
-          />
+          {/* Campaigns were replaced by experiment scheduling; keep old links working. */}
+          <Route path="campaign-management" element={<Navigate to="/experiment-scheduling" replace />} />
           <Route
             path="experiment-scheduling"
             element={

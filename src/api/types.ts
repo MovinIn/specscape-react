@@ -43,6 +43,8 @@ export interface Sensor {
   model?: string | null
   frontend?: string | null
   sensing?: boolean
+  /** Moves around (e.g. on a vehicle); `position` is its last reported fix. See MobileAreaBookings.md. */
+  mobile?: boolean
   /** Unix seconds. */
   lastConnectionEvent?: number
   anonymized?: boolean

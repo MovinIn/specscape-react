@@ -61,7 +61,11 @@ export function BookingList({ bookings, sensorName, showIssuer, editingId, busyI
                   <tr key={b.id} className={editingId === b.id ? 'info' : undefined}>
                     <td>{b.id}</td>
                     {showIssuer && <td>{b.issuer}</td>}
-                    <td>{b.sensors.length === 0 ? 'All sensors' : b.sensors.map(sensorName).join(', ')}</td>
+                    <td title={b.parameters.area ? b.sensors.map(sensorName).join(', ') : undefined}>
+                      {b.sensors.length === 0 ? 'All sensors'
+                        : b.parameters.area ? `Area · ${b.sensors.length} fixed + mobile`
+                        : b.sensors.map(sensorName).join(', ')}
+                    </td>
                     <td>{fmtRange(startMs, stopMs)}</td>
                     <td>{stopMs === null ? '—' : fmtLength((stopMs - startMs) / 1000)}</td>
                     <td><span className={`xs-status is-${b.status}`}>{b.status}</span></td>

@@ -57,6 +57,18 @@ export const MOCK_SENSORS: Sensor[] = [
     frontend: 'rtl-sdr2',
     owner: 'partner',
   },
+  {
+    id: 4,
+    serial: 11259378,
+    name: 'demo-zurich-bus',
+    sensing: true,
+    mobile: true,
+    hardware: 'esraspi4psdr',
+    type: 'esraspi4psdr',
+    frontend: 'rtl-sdr2',
+    owner: 'demo',
+    position: { latitude: 47.3712, longitude: 8.5302, indoor: false },
+  },
 ]
 
 export const MOCK_STATUS: SensorStatusEntry[] = MOCK_SENSORS.map((s) => ({

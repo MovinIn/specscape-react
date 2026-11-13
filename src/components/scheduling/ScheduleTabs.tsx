@@ -1,23 +1,23 @@
-import { NavLink } from 'react-router-dom'
-import { useAuth } from '../../auth/AuthContext'
+type Props = {
+  byArea: boolean
+  onChange: (byArea: boolean) => void
+}
 
-/** Tab strip shared by Campaign management and Experiment scheduling. */
-export function ScheduleTabs() {
-  const { isAdmin } = useAuth()
+/** How the booking picks its sensors: by name, or everything free inside a drawn area. */
+export function ScheduleTabs({ byArea, onChange }: Props) {
+  const tab = (area: boolean, label: string) => (
+    <li role="presentation">
+      <a href={area ? '?by=area' : '?'} role="tab" aria-selected={byArea === area}
+        className={byArea === area ? 'xs-tab-active' : undefined}
+        onClick={(e) => { e.preventDefault(); if (byArea !== area) onChange(area) }}>
+        {label}
+      </a>
+    </li>
+  )
   return (
     <ul className="nav nav-tabs xs-tabs" role="tablist" style={{ marginBottom: 20 }}>
-      {isAdmin && (
-        <li role="presentation">
-          <NavLink to="/campaign-management" className={({ isActive }) => (isActive ? 'xs-tab-active' : undefined)}>
-            Campaigns
-          </NavLink>
-        </li>
-      )}
-      <li role="presentation">
-        <NavLink to="/experiment-scheduling" className={({ isActive }) => (isActive ? 'xs-tab-active' : undefined)}>
-          Experiment scheduling
-        </NavLink>
-      </li>
+      {tab(false, 'Specific sensors')}
+      {tab(true, 'Area')}
     </ul>
   )
 }

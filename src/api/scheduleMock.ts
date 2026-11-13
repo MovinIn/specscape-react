@@ -171,7 +171,7 @@ function bookingRuleErrors(task: Omit<Stored, 'id'>, start: number, stop: number
     errs.push(`Length of ${length} seconds (${length / 60} minutes) is not a multiple of the slot size of ${SLOT} seconds (${SLOT / 60} minutes)`)
   if (length < MIN_LENGTH || length > MAX_LENGTH)
     errs.push(`Length of ${length} seconds is outside the allowed range of ${MIN_LENGTH} to ${MAX_LENGTH} seconds`)
-  if (task.sensors.length > MAX_SENSORS)
+  if (task.sensors.length > MAX_SENSORS && !task.parameters?.area) // area bookings have no sensor cap
     errs.push(`${task.sensors.length} sensors selected, at most ${MAX_SENSORS} are allowed per booking`)
   if (task.sensors.length === 0)
     errs.push('A booking must name at least one sensor. An empty sensor list means all sensors, which cannot be booked')

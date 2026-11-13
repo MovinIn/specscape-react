@@ -115,3 +115,39 @@
   .xs-legend { margin-left: 0; }
   .xs-actions { white-space: normal; }
 }
+
+.xs-len { display: flex; gap: 8px; }
+.xs-len .form-control { width: auto; }
+
+.xs-file { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid #cfd8e3; border-radius: 4px; background: #f7f9fb; color: #444; }
+.xs-file small { display: block; color: #888; }
+.xs-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.xs-file-size { color: #888; font-size: 12px; }
+.xs-file-x { border: 0; background: none; font-size: 22px; line-height: 1; color: #888; cursor: pointer; }
+.xs-file-x:hover { color: #c9302c; }
+.xs-file-btn { margin: 0; padding: 6px 14px; border: 1px solid #adb5bd; border-radius: 4px; background: #fff; color: #333; font-weight: 400; cursor: pointer; }
+.xs-file-btn:hover { background: #eef2f6; }
+
+/* area tab */
+.xs-area { display: flex; gap: 16px; }
+.xs-area-map { flex: 1 1 auto; min-width: 0; }
+.xs-area-side { flex: 0 0 300px; }
+.xs-area-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.xs-area-size { margin-left: auto; font-size: 13px; color: #333; }
+.xs-area-size small { color: #727584; }
+.xs-area-canvas { height: 440px; border: 1px solid #e3e5ee; border-radius: 4px; position: relative; z-index: 1; }
+.xs-area-legend { display: flex; gap: 14px; margin-top: 6px; font-size: 12px; color: #727584; }
+.xs-area-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+.xs-area-empty { padding: 12px 0; }
+.xs-area-summary { margin-bottom: 4px; }
+.xs-area-list { max-height: 400px; }
+.xs-dot.is-free { background: #3fb618; }
+.xs-dot.is-busy { background: #f0a30a; }
+.xs-dot.is-offline { background: #ce3c36; }
+@media (max-width: 991px) {
+  .xs-area { flex-direction: column; }
+  .xs-area-side { flex-basis: auto; }
+  .xs-area-canvas { height: 340px; }
+}
+.xs-area-mobile { margin-top: 10px; padding: 10px 12px; border-left: 3px solid #2780e3; background: #f4f8fd; font-size: 13px; color: #444; }
+.xs-area-mobile-now { margin-top: 6px; color: #2780e3; font-weight: 600; }

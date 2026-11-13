@@ -17,7 +17,6 @@ const aboutLinks = [
   ['/privacy-policy', 'Privacy policy'],
 ]
 const adminLinks = [
-  ['/campaign-management', 'Campaign management'],
   ['/experiment-scheduling', 'Experiment scheduling'],
   ['/sensor-application-list', 'Sponsoring requests'],
   ['/sensor-application-statistics', 'Sponsoring statistics'],
