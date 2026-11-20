@@ -463,7 +463,8 @@ export class WaterfallEngine {
     // y axis is time, x axis is frequency
     this.resolution[1] = plotHeight / data.values.length
     const maxLineLength = data.values.reduce((max, v) => (v.length > max ? v.length : max), 0)
-    this.resolution[0] = Math.max(plotWidth / maxLineLength, 1)
+    // no 1px floor: more columns than pixels must shrink to fit, not overflow the canvas
+    this.resolution[0] = plotWidth / maxLineLength
     const res = this.resolution
 
     ctx.fillStyle = '#000000'

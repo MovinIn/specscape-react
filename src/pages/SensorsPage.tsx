@@ -5,6 +5,9 @@ import type { ControllerInfo, Sensor, SensorStatusEntry } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { EsLeafletMap, type MapSensor } from '../components/EsLeafletMap'
 
+const POLL_MS = 10_000
+const LIVE_POLL_MS = 2_000
+
 function coordsOf(s: Sensor): { lat: number; lon: number } | null {
   const lat = Number(s.position?.latitude ?? s.latitude ?? s.lat)
   const lon = Number(s.position?.longitude ?? s.longitude ?? s.lon)
@@ -90,6 +93,13 @@ function LastStatusCell({ sensor }: { sensor: Sensor }) {
 }
 
 function PositionBadge({ sensor, short }: { sensor: Sensor; short?: boolean }) {
+  if (sensor.mobile) {
+    return (
+      <span className="label label-success" title="Live GPS position, updated every few seconds">
+        LIVE
+      </span>
+    )
+  }
   const indoor = Boolean(sensor.position?.indoor)
   if (short) return <span className="badge">{indoor ? 'IN' : 'OUT'}</span>
   return <span className="badge">{indoor ? 'INDOOR' : 'OUTDOOR'}</span>
@@ -99,7 +109,7 @@ export default function SensorsPage() {
   const { user, isAdmin } = useAuth()
   const [sensors, setSensors] = useState<Sensor[]>([])
   const [statusMap, setStatusMap] = useState<Record<string, ControllerInfo>>({})
-  const [, setSelected] = useState<Sensor | null>(null)
+  const [selected, setSelected] = useState<Sensor | null>(null)
   const [search, setSearch] = useState('')
   const [statusDialog, setStatusDialog] = useState<Sensor | null>(null)
 
@@ -127,10 +137,12 @@ export default function SensorsPage() {
     void load()
   }, [load])
 
+  // poll faster while a sensor reports a live GPS position, so its marker follows it
+  const anyMobile = sensors.some((s) => s.mobile)
   useEffect(() => {
-    const id = window.setInterval(() => void load(), 10_000)
+    const id = window.setInterval(() => void load(), anyMobile ? LIVE_POLL_MS : POLL_MS)
     return () => window.clearInterval(id)
-  }, [load])
+  }, [load, anyMobile])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -175,6 +187,7 @@ export default function SensorsPage() {
             sensors={mapSensors}
             scrolling
             fitCluster
+            selectedSerial={selected ? String(selected.serial) : null}
             height="100%"
             onSelect={(serial) => {
               const found = sensors.find((s) => String(s.serial) === serial)

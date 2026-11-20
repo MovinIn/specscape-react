@@ -484,6 +484,88 @@ body {
   font-weight: 700;
 }
 
+/* Sensor form: segmented Indoor/Outdoor choice and the obfuscate option card */
+.field-title {
+  font-size: 15px;
+  color: #333333;
+  font-weight: 700;
+  text-align: left;
+}
+
+.choice-group {
+  display: flex;
+  gap: 10px;
+}
+
+.choice {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin: 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  font-weight: 400;
+  color: #555555;
+  cursor: pointer;
+}
+
+.choice:hover {
+  border-color: #66afe9;
+}
+
+.choice:has(input:checked) {
+  border-color: #2c7be5;
+  background: #eaf2fd;
+  color: #1a4f9c;
+  font-weight: 600;
+}
+
+.choice input {
+  margin: 0;
+}
+
+.option-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  margin: 0 0 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fafafa;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.option-card:has(input:checked) {
+  border-color: #2c7be5;
+  background: #eaf2fd;
+}
+
+.option-card input {
+  margin: 3px 0 0;
+  flex-shrink: 0;
+}
+
+.option-card-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #333333;
+}
+
+.option-card-text {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #777777;
+}
+
 .input {
   display: block;
   width: 100%;
@@ -829,6 +911,11 @@ span.sw-default-value-header {
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 4px 20px rgba(24, 25, 34, 0.05);
+}
+
+.sensors-map-col .leaflet-tooltip {
+  font-size: 16px;
+  padding: 8px 12px;
 }
 
 .sensors-map-col .leaflet-map {

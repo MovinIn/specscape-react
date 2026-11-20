@@ -26,6 +26,8 @@ type Props = {
   height?: string | number
   /** On first load, zoom in on the area holding most of the sensors. */
   fitCluster?: boolean
+  /** Serial of a sensor to zoom to when it changes. */
+  selectedSerial?: string | null
 }
 
 function sensorState(s: MapSensor, rtc: boolean): SensorState {
@@ -40,7 +42,7 @@ function sensorState(s: MapSensor, rtc: boolean): SensorState {
  * clustered markers, no popups (the page passes no `infowindow`), and a
  * click selects the sensor, zooms in and turns its marker yellow.
  */
-export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect, refresh, height = 420, fitCluster = false }: Props) {
+export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect, refresh, height = 420, fitCluster = false, selectedSerial }: Props) {
   const divRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null)
@@ -151,6 +153,16 @@ export function EsLeafletMap({ sensors, rtc = false, scrolling = true, onSelect,
       }
     }
   }, [sensors, rtc])
+
+  // zoom to an externally selected sensor (e.g. a clicked list row)
+  useEffect(() => {
+    const marker = selectedSerial ? markersRef.current[selectedSerial] : undefined
+    const map = mapRef.current
+    if (!marker || !map) return
+    clusterRef.current?.zoomToShowLayer(marker, () => {
+      map.flyTo(marker.getLatLng(), ZOOM_AFTER_PAN, { duration: 0.8 })
+    })
+  }, [selectedSerial])
 
   useEffect(() => {
     const t = window.setTimeout(() => mapRef.current?.invalidateSize())

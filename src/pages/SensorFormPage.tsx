@@ -7,13 +7,18 @@ import PageHeader from '../components/PageHeader'
 import { useNotify } from '../components/Notifier'
 import { parseSmartSerial, serial2mac } from '../lib/serial'
 
+/** Geographic centre of the contiguous US (near Lebanon, Kansas). */
+const US_CENTER: [number, number] = [39.8283, -98.5795]
+
 type FormState = {
   name: string
   smartSerial: string
   latitude: string
   longitude: string
   altitude: string
-  indoor: boolean
+  /** null until the user picks Indoor or Outdoor (required, as in the old form) */
+  indoor: boolean | null
+  anonymized: boolean
   type: string
   frontend: string
 }
@@ -31,7 +36,8 @@ const empty: FormState = {
   latitude: '',
   longitude: '',
   altitude: '',
-  indoor: false,
+  indoor: null,
+  anonymized: false,
   type: 'esraspi2psdr',
   frontend: 'rtl-sdr2',
 }
@@ -69,7 +75,8 @@ export default function SensorFormPage() {
           latitude: Number.isFinite(lat) ? String(lat) : '',
           longitude: Number.isFinite(lon) ? String(lon) : '',
           altitude: Number.isFinite(alt) ? String(alt) : '',
-          indoor: Boolean(pos.indoor ?? s.indoor),
+          indoor: pos.indoor == null && s.indoor == null ? null : Boolean(pos.indoor ?? s.indoor),
+          anonymized: Boolean(s.anonymized),
           type: String(s.type ?? 'esraspi2psdr'),
           frontend: String(s.frontend ?? 'rtl-sdr2'),
         })
@@ -89,6 +96,8 @@ export default function SensorFormPage() {
   }
 
   const mapMarkers = useMemo(() => {
+    // Number('') is 0, so blank fields must not become a marker at 0,0
+    if (form.latitude.trim() === '' || form.longitude.trim() === '') return []
     const lat = Number(form.latitude)
     const lon = Number(form.longitude)
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return []
@@ -107,7 +116,7 @@ export default function SensorFormPage() {
     setError(null)
     const lat = Number(form.latitude)
     const lon = Number(form.longitude)
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    if (form.latitude.trim() === '' || form.longitude.trim() === '' || !Number.isFinite(lat) || !Number.isFinite(lon)) {
       setError('Latitude and longitude must be numbers.')
       return
     }
@@ -142,8 +151,9 @@ export default function SensorFormPage() {
         latitude: lat,
         longitude: lon,
         altitude: Number.isFinite(altitude) ? altitude : undefined,
-        indoor: form.indoor,
+        indoor: form.indoor ?? undefined,
       },
+      anonymized: form.anonymized,
       latitude: lat,
       longitude: lon,
     }
@@ -286,13 +296,45 @@ export default function SensorFormPage() {
               onChange={(e) => update('altitude', e.target.value)}
             />
           </div>
-          <label className="field" style={{ flexDirection: 'row', gap: '0.6rem' }}>
+          <div className="field">
+            <span className="field-title">Antenna position</span>
+            <div className="choice-group" role="radiogroup" aria-label="Antenna position">
+              <label className="choice">
+                <input
+                  type="radio"
+                  name="indoor"
+                  required
+                  checked={form.indoor === true}
+                  onChange={() => update('indoor', true)}
+                />
+                Indoor
+              </label>
+              <label className="choice">
+                <input
+                  type="radio"
+                  name="indoor"
+                  required
+                  checked={form.indoor === false}
+                  onChange={() => update('indoor', false)}
+                />
+                Outdoor
+              </label>
+            </div>
+          </div>
+          <label className="option-card">
             <input
               type="checkbox"
-              checked={form.indoor}
-              onChange={(e) => update('indoor', e.target.checked)}
+              checked={form.anonymized}
+              onChange={(e) => update('anonymized', e.target.checked)}
             />
-            <span className="label">Indoor antenna</span>
+            <span>
+              <span className="option-card-title">Obfuscate position</span>
+              <span className="option-card-text">
+                Hide your sensor&apos;s real position. Other users will see an
+                obfuscated location within a radius of 1km instead. We never
+                show your name or address to other users.
+              </span>
+            </span>
           </label>
           <div className="stack" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
             <button
@@ -316,7 +358,7 @@ export default function SensorFormPage() {
             center={
               mapMarkers[0]
                 ? [mapMarkers[0].lat, mapMarkers[0].lon]
-                : undefined
+                : US_CENTER
             }
             zoom={mapMarkers[0] ? 10 : 4}
             onMapClick={(lat, lon) => {

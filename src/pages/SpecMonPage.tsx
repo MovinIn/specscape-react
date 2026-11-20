@@ -796,7 +796,30 @@ export default function SpecMonPage() {
       )}
 
       {helpOpen && (
-        <div className="alert alert-info" role="status" style={{ margin: '10px 0' }}>
+        <div
+          className="alert alert-info"
+          role="status"
+          style={{
+            position: 'fixed',
+            top: 70,
+            right: 20,
+            width: 340,
+            maxWidth: 'calc(100vw - 40px)',
+            zIndex: 1050,
+            boxShadow: '0 4px 16px rgba(0,0,0,.35)',
+            margin: 0,
+          }}
+        >
+          <button
+            type="button"
+            className="close"
+            aria-label="Close help"
+            onClick={() => setHelpOpen(false)}
+          >
+            &times;
+          </button>
+          <strong>Help</strong>
+          <br />
           Hover the waterfall to inspect a value and see that minute&apos;s
           spectrum below. Drag the waterfall to move in frequency and time,
           Shift+drag to zoom into a frequency range, or hold Ctrl while
